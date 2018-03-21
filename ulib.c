@@ -141,3 +141,11 @@ memmove(void *vdst, void *vsrc, int n)
     *dst++ = *src++;
   return vdst;
 }
+
+char* chopnewline(char *s) {
+  char *last = &s[strlen(s) - 1];
+  if (*last == '\n') {
+    *last = 0;
+  }
+  return s;
+}

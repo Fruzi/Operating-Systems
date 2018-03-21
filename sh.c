@@ -150,6 +150,7 @@ getcmd(char *buf, int nbuf)
   return 0;
 }
 
+/* Task 1.1 */
 void init_history(history_item history[]) {
 	history_item* hi;
 	for (hi = &history[0]; hi < &history[MAX_HISTORY]; hi++) {
@@ -198,15 +199,44 @@ void print_history(history_item history[]) {
 	}
 }
 
+/* Task 1.2 */
+int replace_vars(char buf[]) {
+  char aux_buf[100] = {0};
+  int buf_idx = 0;
+  int aux_idx = 0;
+  int var_idx = 0;
+  for (; buf_idx < 100 && buf[buf_idx]; buf_idx++) {
+    if (buf[buf_idx] == '$') {
+      var_idx = buf_idx + 1;
+      for (; buf[var_idx] != ' ' && buf[var_idx] != '$' && buf[var_idx] != '\n'; var_idx++);
+      int var_size = var_idx - buf_idx - 1;
+      char variable[var_size + 1];
+      safestrcpy(variable, &buf[buf_idx + 1], var_size + 1);
+      if (getVariable(variable, &aux_buf[aux_idx]) != 0) {
+        printf(2, "Variable %s not found\n", variable);
+        return -1; /* continue the big loop */
+      }
+      buf_idx = var_idx - 1;
+      aux_idx += strlen(&aux_buf[aux_idx]);
+    } else {
+      aux_buf[aux_idx++] = buf[buf_idx];
+    }
+  }
+  safestrcpy(buf, aux_buf, 100);
+  return 0;
+}
+
 int
 main(void)
 {
   static char buf[100];
   int fd;
+
   history_item history[MAX_HISTORY];
   int line_num = 0;
 
   init_history(history);
+  int redo_cmd = 0; // is 1 when history -l ## is used
 
   // Ensure that three file descriptors are open.
   while((fd = open("console", O_RDWR)) >= 0){
@@ -217,39 +247,68 @@ main(void)
   }
 
   // Read and run input commands.
-  while(getcmd(buf, sizeof(buf)) >= 0){
-    add_history_item(history, ++line_num, buf);
+  while(redo_cmd || getcmd(buf, sizeof(buf)) >= 0){
+    // Add fresh command to history
+    if (!redo_cmd) {
+      add_history_item(history, ++line_num, buf);
+    }
+    redo_cmd = 0;
+
+    // Get global variables
+    if (replace_vars(buf) != 0) {
+      continue;
+    }
+
+    // cd
     if(buf[0] == 'c' && buf[1] == 'd' && buf[2] == ' '){
       // Chdir must be called by the parent, not the child.
-      buf[strlen(buf)-1] = 0;  // chop \n
+      chopnewline(buf);
       if(chdir(buf+3) < 0)
         printf(2, "cannot cd %s\n", buf+3);
       continue;
     }
+
+    // History
     if (strcmp(buf, "history\n") == 0) {
       print_history(history);
       continue;
     }
+
+    // Line history
     if (strncmp(buf, "history -l ", strlen("history -l ")) == 0) {
       int req_line_num = atoi(&buf[strlen("history -l ")]);
       history_item* found_item = find_history_item(history, req_line_num);
       if (found_item) {
         safestrcpy(buf, found_item->item, 100);
-        if(buf[0] == 'c' && buf[1] == 'd' && buf[2] == ' '){
-          // Chdir must be called by the parent, not the child.
-          buf[strlen(buf)-1] = 0;  // chop \n
-          if(chdir(buf+3) < 0)
-            printf(2, "cannot cd %s\n", buf+3);
-          continue;
-        }
-      } else {
-        continue;
+        redo_cmd = 1;
       }
+      continue;
     }
+
+    // Set global variable
     char* eq_pos;
     if ((eq_pos = strchr(buf, '=')) != 0) {
-      *eq_pos = '\0';
-      setVariable(buf, eq_pos + 1);
+      *eq_pos = 0;
+      char* val = eq_pos + 1;
+      chopnewline(val);
+      switch (setVariable(buf, val)) {
+        case -1:
+          printf(2, "No room for additional variables\n");
+          break;
+        case -2:
+          printf(2, "Invalid variable name\n");
+          break;
+        default:
+          continue;
+      }
+    }
+
+    // Remove variable (debug)
+    if (strncmp(buf, "rem ", strlen("rem ")) == 0) {
+      chopnewline(&buf[4]);
+      if (remVariable(&buf[4]) != 0) {
+        printf(2, "Couldn't remove variable %s\n", &buf[4]);
+      }
       continue;
     }
 

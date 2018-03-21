@@ -32,11 +32,13 @@ static struct {
 #define MAX_VARIABLES 32
 
 typedef struct binding {
+  int used;
   char variable[MAX_VAR_SIZE];
   char value[MAX_VAL_SIZE];
 } binding;
 
 binding bindings[MAX_VARIABLES];
+int initialized = 0;
 
 void init_bindings() {
 	binding* b;
@@ -48,14 +50,24 @@ void init_bindings() {
 binding* find_binding(char* variable) {
   binding* b;
   for (b = &bindings[0]; b < &bindings[MAX_VARIABLES]; b++) {
-    if (strncmp(b->variable, variable, strlen(variable)) == 0) {
+    if (b->used && strncmp(b->variable, variable, strlen(variable)) == 0) {
       return b;
     }
   }
   return NULL;
 }
 
-int check_variable(char* variable) {
+binding* find_unused_binding() {
+  binding* b;
+  for (b = &bindings[0]; b < &bindings[MAX_VARIABLES]; b++) {
+    if (!b->used) {
+      return b;
+    }
+  }
+  return NULL;
+}
+
+int check_valid(char* variable) {
   int i;
   for (i = 0; i < MAX_VAR_SIZE && variable[i]; i++) {
     if (!((variable[i] >= 'A' && variable[i] <= 'Z')
@@ -67,13 +79,20 @@ int check_variable(char* variable) {
 }
 
 int setVariable(char* variable, char* value) {
+  if (!initialized) {
+    init_bindings();
+    initialized = 1;
+  }
   binding* available_binding;
-  if (!check_variable(variable)) {
+  if (!check_valid(variable)) {
     return -2;
   }
-  if ((available_binding = find_binding("")) == NULL) {
-    return -1;
+  if ((available_binding = find_binding(variable)) == NULL) {
+    if ((available_binding = find_unused_binding()) == NULL) {
+      return -1;
+    }
   }
+  available_binding->used = 1;
   safestrcpy(available_binding->variable, variable, MAX_VAR_SIZE);
   safestrcpy(available_binding->value, value, MAX_VAL_SIZE);
 	return 0;
