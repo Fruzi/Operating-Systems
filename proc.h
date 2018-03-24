@@ -48,8 +48,28 @@ struct proc {
   int killed;                  // If non-zero, have been killed
   struct file *ofile[NOFILE];  // Open files
   struct inode *cwd;           // Current directory
+  int ctime;                   // Creation time
+  int etime;                   // End time
+  int iotime;                  // Total time of waiting for IO
+  int rtime;                   // Total running time
+  #ifdef FCFS
+  int enqueuetime;             // Time when inserted into FCFS queue
+  #endif
+  #ifdef SRT
+  int approx_rtime;            // Approximated runtime
+  #endif
+  #ifdef CFSD
+  int priority;                // Scheduler priority
+  #endif
   char name[16];               // Process name (debugging)
 };
+
+#ifdef CFSD
+// Scheduler priorities
+#define HIGH 1
+#define NORMAL 2
+#define LOW 3
+#endif
 
 // Process memory is laid out contiguously, low addresses first:
 //   text

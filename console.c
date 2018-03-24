@@ -15,6 +15,8 @@
 #include "proc.h"
 #include "x86.h"
 
+#define NULL 0
+
 static void consputc(int);
 
 static int panicked = 0;
@@ -23,8 +25,6 @@ static struct {
   struct spinlock lock;
   int locking;
 } cons;
-
-#define NULL 0
 
 // task 1.2
 #define MAX_VAR_SIZE 32

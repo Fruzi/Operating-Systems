@@ -25,3 +25,4 @@
 #define SYS_setVariable 24
 #define SYS_getVariable 25
 #define SYS_remVariable 26
+#define SYS_set_priority 27

@@ -53,6 +53,16 @@ trap(struct trapframe *tf)
       ticks++;
       wakeup(&ticks);
       release(&tickslock);
+
+      // Task 2
+      if (myproc()) {
+        if (myproc()->state == RUNNING) {
+          myproc()->rtime++;
+        } else if (myproc()->state == SLEEPING) {
+          myproc()->iotime++;
+        }
+      }
+      //
     }
     lapiceoi();
     break;
@@ -100,11 +110,16 @@ trap(struct trapframe *tf)
   if(myproc() && myproc()->killed && (tf->cs&3) == DPL_USER)
     exit();
 
-  // Force process to give up CPU on clock tick.
+  // Force process to give up CPU on clock tick (Task 3 - on quantum clock ticks).
   // If interrupts were on while locks held, would need to check nlock.
+  #ifdef FCFS
+  // Do not yield
+  #else
   if(myproc() && myproc()->state == RUNNING &&
-     tf->trapno == T_IRQ0+IRQ_TIMER)
+     tf->trapno == T_IRQ0+IRQ_TIMER && /* Task 3 --> */ ticks % QUANTUM == 0) {
     yield();
+  }
+  #endif
 
   // Check if the process has been killed since we yielded
   if(myproc() && myproc()->killed && (tf->cs&3) == DPL_USER)

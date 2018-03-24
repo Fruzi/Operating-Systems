@@ -7,6 +7,8 @@
 #include "proc.h"
 #include "spinlock.h"
 
+#define NULL 0
+
 struct {
   struct spinlock lock;
   struct proc proc[NPROC];
@@ -19,6 +21,14 @@ extern void forkret(void);
 extern void trapret(void);
 
 static void wakeup1(void *chan);
+
+#ifdef CFSD
+static float decay_factor[] = {
+[HIGH]    0.75,
+[NORMAL]  1,
+[LOW]     1.25
+};
+#endif
 
 void
 pinit(void)
@@ -112,6 +122,19 @@ found:
   memset(p->context, 0, sizeof *p->context);
   p->context->eip = (uint)forkret;
 
+  // Task 2
+  p->ctime = ticks;
+  #ifdef FCFS
+  p->enqueuetime = ticks;
+  #endif
+  #ifdef SRT
+  p->approx_rtime = QUANTUM;
+  #endif
+  p->etime = 0;
+  p->iotime = 0;
+  p->rtime = 0;
+  //
+
   return p;
 }
 
@@ -141,6 +164,10 @@ userinit(void)
 
   safestrcpy(p->name, "initcode", sizeof(p->name));
   p->cwd = namei("/");
+
+  #ifdef CFSD
+  p->priority = NORMAL;
+  #endif
 
   // this assignment to p->state lets other cores
   // run this process. the acquire forces the above
@@ -212,11 +239,19 @@ fork(void)
 
   pid = np->pid;
 
+  #ifdef CFSD
+  np->priority = curproc->priority;
+  #endif
+
   acquire(&ptable.lock);
 
   np->state = RUNNABLE;
 
   release(&ptable.lock);
+
+  #ifdef SRT
+  curproc->approx_rtime = QUANTUM;
+  #endif
 
   return pid;
 }
@@ -263,6 +298,7 @@ exit(void)
 
   // Jump into the scheduler, never to return.
   curproc->state = ZOMBIE;
+  curproc->etime = ticks; // Task 2
   sched();
   panic("zombie exit");
 }
@@ -314,7 +350,54 @@ wait(void)
 int
 wait2(int pid, int* wtime, int* rtime, int* iotime)
 {
-  // TODO
+  struct proc *p;
+  int havekids;
+  struct proc *curproc = myproc();
+
+  acquire(&ptable.lock);
+  for(;;){
+    // Scan through table looking for exited children.
+    havekids = 0;
+    for(p = ptable.proc; p < &ptable.proc[NPROC]; p++){
+      if(p->parent != curproc)
+        continue;
+      havekids = 1;
+      if(p->pid == pid && p->state == ZOMBIE){
+        // Found the one.
+        *wtime = p->etime - p->ctime - p->iotime - p->rtime;
+        *rtime = p->rtime;
+        *iotime = p->iotime;
+        kfree(p->kstack);
+        p->kstack = 0;
+        freevm(p->pgdir);
+        p->pid = 0;
+        p->parent = 0;
+        p->name[0] = 0;
+        p->killed = 0;
+        p->state = UNUSED;
+        release(&ptable.lock);
+        return pid;
+      }
+    }
+
+    // No point waiting if we don't have any children.
+    if(!havekids || curproc->killed){
+      release(&ptable.lock);
+      return -1;
+    }
+
+    // Wait for children to exit.  (See wakeup1 call in proc_exit.)
+    sleep(curproc, &ptable.lock);  //DOC: wait-sleep
+  }
+}
+
+int set_priority(int priority) {
+  if (priority < 1 || priority > 3) {
+    return -1;
+  }
+  #ifdef CFSD
+  myproc()->priority = priority;
+  #endif
   return 0;
 }
 
@@ -337,12 +420,14 @@ scheduler(void)
     // Enable interrupts on this processor.
     sti();
 
-    // Loop over process table looking for process to run.
     acquire(&ptable.lock);
-    for(p = ptable.proc; p < &ptable.proc[NPROC]; p++){
-      if(p->state != RUNNABLE)
+    // Task 3
+    #ifdef DEFAULT
+    // Loop over process table looking for process to run.
+    for(p = ptable.proc; p < &ptable.proc[NPROC]; p++) {
+      if(p->state != RUNNABLE) {
         continue;
-
+      }
       // Switch to chosen process.  It is the process's job
       // to release ptable.lock and then reacquire it
       // before jumping back to us.
@@ -357,8 +442,111 @@ scheduler(void)
       // It should have changed its p->state before coming back.
       c->proc = 0;
     }
-    release(&ptable.lock);
 
+    #else
+    #ifdef FCFS
+    // Find the next process to run (next in line)
+    struct proc *next_p = NULL;
+    for (p = ptable.proc; p < &ptable.proc[NPROC]; p++) {
+      if (p->state == RUNNABLE) {
+        if (next_p) {
+          if (p->enqueuetime < next_p->enqueuetime)
+            next_p = p;
+        } else {
+          next_p = p;
+        }
+      }
+    }
+    if (next_p) {
+      p = next_p;
+      // Switch to chosen process.  It is the process's job
+      // to release ptable.lock and then reacquire it
+      // before jumping back to us.
+      c->proc = next_p;
+      switchuvm(next_p);
+      next_p->state = RUNNING;
+
+      swtch(&c->scheduler, next_p->context);
+      switchkvm();
+
+      // Process is done running for now.
+      // It should have changed its p->state before coming back.
+      c->proc = 0;
+    }
+
+    #else
+    #ifdef SRT
+    // Find the process with the shortest approximated remaining runtime
+    struct proc *next_p = NULL;
+    for (p = ptable.proc; p < &ptable.proc[NPROC]; p++) {
+      if (p->state == RUNNABLE) {
+        if (next_p) {
+          if (p->approx_rtime < next_p->approx_rtime)
+            next_p = p;
+        } else {
+          next_p = p;
+        }
+      }
+    }
+    if (next_p) {
+      p = next_p;
+      // Switch to chosen process.  It is the process's job
+      // to release ptable.lock and then reacquire it
+      // before jumping back to us.
+      c->proc = next_p;
+      switchuvm(next_p);
+      next_p->state = RUNNING;
+
+      swtch(&c->scheduler, next_p->context);
+      switchkvm();
+
+      // Process is done running for now.
+      // It should have changed its p->state before coming back.
+      c->proc = 0;
+    }
+
+    #else
+    #ifdef CFSD
+    // Find the process with the minimum run time ratio
+    struct proc *next_p = NULL;
+    float min_ratio = 1;
+    for (p = ptable.proc; p < &ptable.proc[NPROC]; p++) {
+      if (p->state == RUNNABLE) {
+        int wtime = ticks - p->ctime - p->iotime - p->rtime;
+        float ratio = (p->rtime * decay_factor[p->priority]) / (p->rtime + wtime);
+        if (next_p) {
+          if (ratio < min_ratio) {
+            min_ratio = ratio;
+            next_p = p;
+          }
+        } else {
+          min_ratio = ratio;
+          next_p = p;
+        }
+      }
+    }
+    if (next_p) {
+      p = next_p;
+      // Switch to chosen process.  It is the process's job
+      // to release ptable.lock and then reacquire it
+      // before jumping back to us.
+      c->proc = next_p;
+      switchuvm(next_p);
+      next_p->state = RUNNING;
+
+      swtch(&c->scheduler, next_p->context);
+      switchkvm();
+
+      // Process is done running for now.
+      // It should have changed its p->state before coming back.
+      c->proc = 0;
+    }
+    #endif
+    #endif
+    #endif
+    #endif
+
+    release(&ptable.lock);
   }
 }
 
@@ -394,6 +582,14 @@ yield(void)
 {
   acquire(&ptable.lock);  //DOC: yieldlock
   myproc()->state = RUNNABLE;
+  #ifdef FCFS
+  myproc()->enqueuetime = ticks;
+  #endif
+  #ifdef SRT
+  if (myproc()->rtime >= myproc()->approx_rtime) {
+    myproc()->approx_rtime += (1 + ALPHA) * myproc()->approx_rtime;
+  }
+  #endif
   sched();
   release(&ptable.lock);
 }
@@ -445,6 +641,12 @@ sleep(void *chan, struct spinlock *lk)
   // Go to sleep.
   p->chan = chan;
   p->state = SLEEPING;
+
+  #ifdef SRT
+  if (myproc()->rtime >= myproc()->approx_rtime) {
+    myproc()->approx_rtime += (1 + ALPHA) * myproc()->approx_rtime;
+  }
+  #endif
 
   sched();
 
