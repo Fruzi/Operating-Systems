@@ -124,16 +124,15 @@ found:
 
   // Task 2
   p->ctime = ticks;
-  #ifdef FCFS
-  p->enqueuetime = ticks;
-  #endif
-  #ifdef SRT
-  p->approx_rtime = QUANTUM;
-  #endif
   p->etime = 0;
   p->iotime = 0;
   p->rtime = 0;
   //
+
+  #ifdef SRT
+  // Process started, so initialize approximated runtime to QUANTUM.
+  p->approx_rtime = QUANTUM;
+  #endif
 
   return p;
 }
@@ -165,10 +164,6 @@ userinit(void)
   safestrcpy(p->name, "initcode", sizeof(p->name));
   p->cwd = namei("/");
 
-  #ifdef CFSD
-  p->priority = NORMAL;
-  #endif
-
   // this assignment to p->state lets other cores
   // run this process. the acquire forces the above
   // writes to be visible, and the lock is also needed
@@ -176,6 +171,16 @@ userinit(void)
   acquire(&ptable.lock);
 
   p->state = RUNNABLE;
+
+  #ifdef FCFS
+  // Changed state to RUNNABLE, so move to the back of the line.
+  p->enqueuetime = ticks;
+  #endif
+
+  #ifdef CFSD
+  // First process gets normal priority.
+  p->priority = NORMAL;
+  #endif
 
   release(&ptable.lock);
 }
@@ -239,20 +244,26 @@ fork(void)
 
   pid = np->pid;
 
-  #ifdef CFSD
-  np->priority = curproc->priority;
-  #endif
-
   acquire(&ptable.lock);
 
   np->state = RUNNABLE;
 
-  release(&ptable.lock);
+  #ifdef FCFS
+  // Changed state to RUNNABLE, so move to the back of the line.
+  np->enqueuetime = ticks;
+  #endif
+
+  #ifdef CFSD
+  // Child process inherits the parent's priority.
+  np->priority = curproc->priority;
+  #endif
 
   #ifdef SRT
+  // Reset process' approximated runtime after a fork.
   curproc->approx_rtime = QUANTUM;
   #endif
 
+  release(&ptable.lock);
   return pid;
 }
 
@@ -298,7 +309,16 @@ exit(void)
 
   // Jump into the scheduler, never to return.
   curproc->state = ZOMBIE;
+
+  #ifdef SRT
+  // No longer in RUNNING state, so update approximated run time.
+  if (curproc->rtime >= curproc->approx_rtime) {
+    curproc->approx_rtime += (1 + ALPHA) * curproc->approx_rtime;
+  }
+  #endif
+
   curproc->etime = ticks; // Task 2
+
   sched();
   panic("zombie exit");
 }
@@ -458,7 +478,6 @@ scheduler(void)
       }
     }
     if (next_p) {
-      p = next_p;
       // Switch to chosen process.  It is the process's job
       // to release ptable.lock and then reacquire it
       // before jumping back to us.
@@ -489,7 +508,6 @@ scheduler(void)
       }
     }
     if (next_p) {
-      p = next_p;
       // Switch to chosen process.  It is the process's job
       // to release ptable.lock and then reacquire it
       // before jumping back to us.
@@ -526,7 +544,6 @@ scheduler(void)
       }
     }
     if (next_p) {
-      p = next_p;
       // Switch to chosen process.  It is the process's job
       // to release ptable.lock and then reacquire it
       // before jumping back to us.
@@ -582,14 +599,19 @@ yield(void)
 {
   acquire(&ptable.lock);  //DOC: yieldlock
   myproc()->state = RUNNABLE;
+
   #ifdef FCFS
+  // Changed state to RUNNABLE, so move to the back of the line.
   myproc()->enqueuetime = ticks;
   #endif
+
   #ifdef SRT
+  // No longer in RUNNING state, so update approximated run time.
   if (myproc()->rtime >= myproc()->approx_rtime) {
     myproc()->approx_rtime += (1 + ALPHA) * myproc()->approx_rtime;
   }
   #endif
+
   sched();
   release(&ptable.lock);
 }
@@ -643,8 +665,9 @@ sleep(void *chan, struct spinlock *lk)
   p->state = SLEEPING;
 
   #ifdef SRT
-  if (myproc()->rtime >= myproc()->approx_rtime) {
-    myproc()->approx_rtime += (1 + ALPHA) * myproc()->approx_rtime;
+  // No longer in RUNNING state, so update approximated run time.
+  if (p->rtime >= p->approx_rtime) {
+    p->approx_rtime += (1 + ALPHA) * p->approx_rtime;
   }
   #endif
 
@@ -668,9 +691,15 @@ wakeup1(void *chan)
 {
   struct proc *p;
 
-  for(p = ptable.proc; p < &ptable.proc[NPROC]; p++)
-    if(p->state == SLEEPING && p->chan == chan)
+  for(p = ptable.proc; p < &ptable.proc[NPROC]; p++) {
+    if(p->state == SLEEPING && p->chan == chan) {
       p->state = RUNNABLE;
+      #ifdef FCFS
+      // Changed state to RUNNABLE, so move to the back of the line.
+      p->enqueuetime = ticks;
+      #endif
+    }
+  }
 }
 
 // Wake up all processes sleeping on chan.
@@ -695,8 +724,13 @@ kill(int pid)
     if(p->pid == pid){
       p->killed = 1;
       // Wake process from sleep if necessary.
-      if(p->state == SLEEPING)
+      if(p->state == SLEEPING) {
         p->state = RUNNABLE;
+        #ifdef FCFS
+        // Changed state to RUNNABLE, so move to the back of the line.
+        p->enqueuetime = ticks;
+        #endif
+      }
       release(&ptable.lock);
       return 0;
     }
