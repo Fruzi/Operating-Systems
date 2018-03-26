@@ -25,9 +25,10 @@ char* sbrk(int);
 int sleep(int);
 int uptime(void);
 int yield(void);
-int setVariable(char* variable, char* value);
-int getVariable(char* variable, char* value);
-int remVariable(char* variable);
+int setVariable(char*, char*);
+int getVariable(char*, char*);
+int remVariable(char*);
+int set_priority(int);
 
 // ulib.c
 int stat(char*, struct stat*);

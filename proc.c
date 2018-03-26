@@ -379,10 +379,10 @@ wait2(int pid, int* wtime, int* rtime, int* iotime)
     // Scan through table looking for exited children.
     havekids = 0;
     for(p = ptable.proc; p < &ptable.proc[NPROC]; p++){
-      if(p->parent != curproc)
+      if(!(p->pid == pid && p->parent == curproc))
         continue;
       havekids = 1;
-      if(p->pid == pid && p->state == ZOMBIE){
+      if(p->state == ZOMBIE){
         // Found the one.
         *wtime = p->etime - p->ctime - p->iotime - p->rtime;
         *rtime = p->rtime;
@@ -419,6 +419,18 @@ int set_priority(int priority) {
   myproc()->priority = priority;
   #endif
   return 0;
+}
+
+// Task 2
+void ontick() {
+  struct proc* p;
+  for(p = &ptable.proc[0]; p < &ptable.proc[NPROC]; p++) {
+    if (p->state == RUNNING) {
+      p->rtime++;
+    } else if (p->state == SLEEPING) {
+      p->iotime++;
+    }
+  }
 }
 
 //PAGEBREAK: 42

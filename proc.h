@@ -71,6 +71,8 @@ struct proc {
 #define LOW 3
 #endif
 
+void ontick(void);
+
 // Process memory is laid out contiguously, low addresses first:
 //   text
 //   original data and bss

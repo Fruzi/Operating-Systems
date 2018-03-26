@@ -51,18 +51,9 @@ trap(struct trapframe *tf)
     if(cpuid() == 0){
       acquire(&tickslock);
       ticks++;
+      ontick(); // Update process fields
       wakeup(&ticks);
       release(&tickslock);
-
-      // Task 2
-      if (myproc()) {
-        if (myproc()->state == RUNNING) {
-          myproc()->rtime++;
-        } else if (myproc()->state == SLEEPING) {
-          myproc()->iotime++;
-        }
-      }
-      //
     }
     lapiceoi();
     break;
