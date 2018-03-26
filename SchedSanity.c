@@ -2,14 +2,16 @@
 #include "stat.h"
 #include "user.h"
 
-#define NUM_SUB_P 4
-#define L_LOOP 100
-#define S_LOOP 4
+#define P_TYPES 4
+#define PROCS_PER_TYPE 5
+#define TOTAL_SUB_PROCS (P_TYPES * PROCS_PER_TYPE)
+#define L_LOOP 10000
+#define S_LOOP 100
 
 typedef struct{
 	int pid;
-    int wtime;
-    int rtime;
+	int wtime;
+	int rtime;
 	int iotime;
 }times;
 
@@ -32,59 +34,73 @@ void l_calc(){
 void s_io(){
 	int i;
 	for (i=0; i<S_LOOP ; i++){
-		printf(1, "%d", i);
+		printf(1, "");
 	}
-	printf(1, "\n");
 }
 
 void l_io(){
 	int i;
 	for (i=0; i<L_LOOP ; i++){
-		printf(1, "%d", i);
+		printf(1, "");
 	}
-	printf(1, "\n");
 }
 
 int main(void){
 	int i;
 	int pid=1;
-	times times_arr[NUM_SUB_P];
-	for (i=0; i<NUM_SUB_P ; i++){
+	times times_arr[TOTAL_SUB_PROCS];
+	for (i=0; i<TOTAL_SUB_PROCS ; i++){
 		if(pid){
 			pid=fork();
 			if(pid){
 				times_arr[i].pid=pid;
 			}
-			else if(i==0 && pid==0){
+			else if(i%PROCS_PER_TYPE==0 && pid==0){
 				s_calc();
 				exit();
 			}
-			else if(i==1 && pid==0){
+			else if(i%PROCS_PER_TYPE==1 && pid==0){
 				l_calc();
 				exit();
 			}
-			else if(i==2 && pid==0){
+			else if(i%PROCS_PER_TYPE==2 && pid==0){
 				s_io();
 				exit();
 			}
-			else if(i==3 && pid==0){
+			else if(i%PROCS_PER_TYPE==3 && pid==0){
 				l_io();
 				exit();
 			}
 		}
 	}
-	if(pid==times_arr[NUM_SUB_P].pid){
-		for (i=0; i<NUM_SUB_P ; i++){
+	if(pid>0){
+		times time_results_avgs[P_TYPES];
+		int j;
+		for (i=0; i<TOTAL_SUB_PROCS ; i++){
 			wait2(times_arr[i].pid, &times_arr[i].wtime, 
 				  &times_arr[i].rtime, &times_arr[i].iotime);
+			j = i%PROCS_PER_TYPE;
+			time_results_avgs[j].wtime += times_arr[i].wtime;
+			time_results_avgs[j].rtime += times_arr[i].rtime;
+			time_results_avgs[j].iotime += times_arr[i].iotime;
 		}
+		
 		printf(1, "small calc:\n w: %d\n r: %d\n io: %d\n",
-			   times_arr[0].wtime, times_arr[0].rtime, times_arr[0].iotime);
+			   time_results_avgs[0].wtime / PROCS_PER_TYPE,
+				 time_results_avgs[0].rtime / PROCS_PER_TYPE,
+				 time_results_avgs[0].iotime / PROCS_PER_TYPE);
 		printf(1, "large calc:\n w: %d\n r: %d\n io: %d\n",
-			   times_arr[1].wtime, times_arr[1].rtime, times_arr[1].iotime);
+			   time_results_avgs[1].wtime / PROCS_PER_TYPE,
+				 time_results_avgs[1].rtime / PROCS_PER_TYPE,
+				 time_results_avgs[1].iotime / PROCS_PER_TYPE);
 		printf(1, "small io:\n w: %d\n r: %d\n io: %d\n",
-			   times_arr[2].wtime, times_arr[2].rtime, times_arr[2].iotime);
+			   time_results_avgs[2].wtime / PROCS_PER_TYPE,
+				 time_results_avgs[2].rtime / PROCS_PER_TYPE,
+				 time_results_avgs[2].iotime / PROCS_PER_TYPE);
 		printf(1, "large io:\n w: %d\n r: %d\n io: %d\n",
-			   times_arr[3].wtime, times_arr[3].rtime, times_arr[3].iotime);
+			   time_results_avgs[3].wtime / PROCS_PER_TYPE,
+				 time_results_avgs[3].rtime / PROCS_PER_TYPE,
+				 time_results_avgs[3].iotime / PROCS_PER_TYPE);
 	}
+	exit();
 }		
