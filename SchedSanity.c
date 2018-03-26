@@ -5,8 +5,8 @@
 #define P_TYPES 4
 #define PROCS_PER_TYPE 4
 #define TOTAL_SUB_PROCS (P_TYPES * PROCS_PER_TYPE)
-#define L_LOOP 1000000
-#define M_LOOP 10000
+#define L_LOOP 50000
+#define M_LOOP 1000
 
 typedef struct{
 	int pid;
@@ -53,7 +53,7 @@ int main(void){
 				#ifdef CFSD
 				set_priority((i%3)+1);
 				#endif
-				switch (i/PROCS_PER_TYPE) {
+				switch (i % P_TYPES) {
 					case 0:
 						m_calc();
 						exit();
@@ -73,7 +73,6 @@ int main(void){
 		}
 	}
 	if(pid){
-		printf(1, "\n");
 		times time_results_avgs[P_TYPES];
 		int j;
 		for (i=0; i<TOTAL_SUB_PROCS ; i++){
@@ -84,8 +83,9 @@ int main(void){
 				exit();
 			}
 		}
+		printf(1, "\n");
 		for (i=0; i<TOTAL_SUB_PROCS ; i++){
-			j = i/PROCS_PER_TYPE;
+			j = i % P_TYPES;
 			time_results_avgs[j].wtime += times_arr[i].wtime;
 			time_results_avgs[j].rtime += times_arr[i].rtime;
 			time_results_avgs[j].iotime += times_arr[i].iotime;
