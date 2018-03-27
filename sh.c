@@ -151,61 +151,55 @@ getcmd(char *buf, int nbuf)
 }
 
 /* Task 1.1 */
-void init_history(history_item history[]) {
-	history_item* hi;
-	for (hi = &history[0]; hi < &history[MAX_HISTORY]; hi++) {
-		memset(hi, 0, sizeof(history_item));
-	}
-}
-
 void add_history_item(history_item history[], int line_num, char item[]) {
-	history_item* hi;
-	for (hi = &history[0]; hi < &history[MAX_HISTORY]; hi++) {
-		if (hi->line_num == 0) {
-			hi->line_num = line_num;
-			strcpy(hi->item, item);
-			return;
-		}
-	}
-	for (hi = &history[1]; hi < &history[MAX_HISTORY]; hi++) {
-		history_item* dest = hi - 1;
-		dest->line_num = hi->line_num;
-		strcpy(dest->item, hi->item);
-	}
-	hi--;
-	hi->line_num = line_num;
-	strcpy(hi->item, item);
+  history_item* hi;
+  for (hi = &history[0]; hi < &history[MAX_HISTORY]; hi++) {
+    if (hi->line_num == 0) {
+      hi->line_num = line_num;
+      strcpy(hi->item, item);
+      return;
+    }
+  }
+  for (hi = &history[1]; hi < &history[MAX_HISTORY]; hi++) {
+    history_item* dest = hi - 1;
+    dest->line_num = hi->line_num;
+    strcpy(dest->item, hi->item);
+  }
+  hi--;
+  hi->line_num = line_num;
+  strcpy(hi->item, item);
 }
 
 history_item* find_history_item(history_item history[], int line_num) {
-	history_item* hi = &history[0];
-	int diff = line_num - hi->line_num;
-	if (diff < 16 && diff>=0) {
-		return &history[diff];
-	}
-	return NULL;
+  history_item* hi = &history[0];
+  int diff = line_num - hi->line_num;
+  if (diff < 16 && diff>=0) {
+    return &history[diff];
+  }
+  return NULL;
 }
 
 void print_history_item(history_item* item) {
-	if (item == NULL || item->line_num == 0) return;
-	printf(1, "%d. %s", item->line_num, item->item);
+  if (item == NULL || item->line_num == 0) return;
+  printf(1, "%d. %s", item->line_num, item->item);
 }
 
 void print_history(history_item history[]) {
-	history_item* hi;
-	for (hi = &history[0]; hi < &history[MAX_HISTORY]; hi++) {
-		if (hi->line_num == 0) break;
-		print_history_item(hi);
-	}
+  history_item* hi;
+  for (hi = &history[0]; hi < &history[MAX_HISTORY]; hi++) {
+    if (hi->line_num == 0) break;
+    print_history_item(hi);
+  }
 }
 
 /* Task 1.2 */
-int replace_vars(char buf[]) {
+void replace_vars(char buf[]) {
   char aux_buf[100] = {0};
   int buf_idx = 0;
   int aux_idx = 0;
   int var_idx = 0;
-  for (; buf_idx < 100 && buf[buf_idx]; buf_idx++) {
+  for (; buf_idx < 100 && buf[buf_idx]; buf_idx++, aux_idx++) {
+    aux_buf[aux_idx] = buf[buf_idx];
     if (buf[buf_idx] == '$') {
       var_idx = buf_idx + 1;
       for (; buf[var_idx] != ' ' && buf[var_idx] != '$' && buf[var_idx] != '\n'; var_idx++);
@@ -213,17 +207,14 @@ int replace_vars(char buf[]) {
       char variable[var_size + 1];
       safestrcpy(variable, &buf[buf_idx + 1], var_size + 1);
       if (getVariable(variable, &aux_buf[aux_idx]) != 0) {
-        printf(2, "Variable %s not found\n", variable);
-        return -1; /* continue the big loop */
+        // Variable not found. Leave it as is.
+        continue;
       }
       buf_idx = var_idx - 1;
-      aux_idx += strlen(&aux_buf[aux_idx]);
-    } else {
-      aux_buf[aux_idx++] = buf[buf_idx];
+      aux_idx += strlen(&aux_buf[aux_idx]) - 1;
     }
   }
   safestrcpy(buf, aux_buf, 100);
-  return 0;
 }
 
 int
@@ -232,10 +223,8 @@ main(void)
   static char buf[100];
   int fd;
 
-  history_item history[MAX_HISTORY];
+  history_item history[MAX_HISTORY] = {0};
   int line_num = 0;
-
-  init_history(history);
   int redo_cmd = 0; // is 1 when history -l ## is used
 
   // Ensure that three file descriptors are open.
@@ -255,9 +244,7 @@ main(void)
     redo_cmd = 0;
 
     // Get global variables
-    if (replace_vars(buf) != 0) {
-      continue;
-    }
+    replace_vars(buf);
 
     // cd
     if(buf[0] == 'c' && buf[1] == 'd' && buf[2] == ' '){

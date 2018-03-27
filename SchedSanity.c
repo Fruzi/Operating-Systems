@@ -76,7 +76,7 @@ int main(void){
 		times time_results_avgs[P_TYPES];
 		int j;
 		for (i=0; i<TOTAL_SUB_PROCS ; i++){
-			int waitret = wait2(times_arr[i].pid, &times_arr[i].wtime, 
+			int waitret = wait2(times_arr[i].pid, &times_arr[i].wtime,
 				  &times_arr[i].rtime, &times_arr[i].iotime);
 			if (waitret < 0) {
 				printf(2, "wait2 error\n");
@@ -93,7 +93,7 @@ int main(void){
 			printf(1, "%d: w: %d r: %d io: %d\n",
 			i, times_arr[i].wtime, times_arr[i].rtime, times_arr[i].iotime);
 		}
-		
+		printf(1, "\n");
 		printf(1, "medium calc:\n w: %d\n r: %d\n io: %d\n",
 			   time_results_avgs[0].wtime / PROCS_PER_TYPE,
 				 time_results_avgs[0].rtime / PROCS_PER_TYPE,

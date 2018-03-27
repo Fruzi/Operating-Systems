@@ -37,15 +37,7 @@ typedef struct binding {
   char value[MAX_VAL_SIZE];
 } binding;
 
-binding bindings[MAX_VARIABLES];
-int initialized = 0;
-
-void init_bindings() {
-	binding* b;
-  for (b = &bindings[0]; b < &bindings[MAX_VARIABLES]; b++) {
-    memset(b, 0, sizeof(binding));
-  }
-}
+binding bindings[MAX_VARIABLES] = {0};
 
 binding* find_binding(char* variable) {
   binding* b;
@@ -79,10 +71,6 @@ int check_valid(char* variable) {
 }
 
 int setVariable(char* variable, char* value) {
-  if (!initialized) {
-    init_bindings();
-    initialized = 1;
-  }
   binding* available_binding;
   if (!check_valid(variable)) {
     return -2;
@@ -95,7 +83,7 @@ int setVariable(char* variable, char* value) {
   available_binding->used = 1;
   safestrcpy(available_binding->variable, variable, MAX_VAR_SIZE);
   safestrcpy(available_binding->value, value, MAX_VAL_SIZE);
-	return 0;
+  return 0;
 }
 
 int getVariable(char* variable, char* value) {
@@ -103,8 +91,8 @@ int getVariable(char* variable, char* value) {
   if ((found_binding = find_binding(variable)) == NULL) {
     return -1;
   }
-	safestrcpy(value, found_binding->value, MAX_VAL_SIZE);
-	return 0;
+  safestrcpy(value, found_binding->value, MAX_VAL_SIZE);
+  return 0;
 }
 
 int remVariable(char* variable) {
@@ -112,8 +100,8 @@ int remVariable(char* variable) {
   if ((found_binding = find_binding(variable)) == NULL) {
     return -1;
   }
-	memset(found_binding, 0, sizeof(binding));
-	return 0;
+  found_binding->used = 0;
+  return 0;
 }
 
 static void

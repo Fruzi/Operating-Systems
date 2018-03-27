@@ -24,9 +24,9 @@ static void wakeup1(void *chan);
 
 #ifdef CFSD
 static float decay_factor[] = {
-[HIGH]    0.75,
-[NORMAL]  1,
-[LOW]     1.25
+  [HIGH]    0.75,
+  [NORMAL]  1,
+  [LOW]     1.25
 };
 #endif
 
@@ -423,6 +423,7 @@ int set_priority(int priority) {
 
 // Task 2
 void ontick() {
+  acquire(&ptable.lock);
   struct proc* p;
   for(p = &ptable.proc[0]; p < &ptable.proc[NPROC]; p++) {
     if (p->state == RUNNING) {
@@ -431,6 +432,7 @@ void ontick() {
       p->iotime++;
     }
   }
+  release(&ptable.lock);
 }
 
 //PAGEBREAK: 42
