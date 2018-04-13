@@ -29,3 +29,8 @@ SYSCALL(getpid)
 SYSCALL(sbrk)
 SYSCALL(sleep)
 SYSCALL(uptime)
+
+/* Assignment 2 */
+SYSCALL(sigprocmask)
+SYSCALL(signal)
+SYSCALL(sigret)

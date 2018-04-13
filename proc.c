@@ -212,6 +212,11 @@ fork(void)
   np->parent = curproc;
   *np->tf = *curproc->tf;
 
+  /* Assignment 2 */
+  // Inherit the parent’s signal mask and signal handlers.
+  np->sig_mask = curproc->sig_mask;
+  memmove(np->sig_handlers, curproc->sig_handlers, sizeof(curproc->sig_handlers));
+
   // Clear %eax so that fork returns 0 in the child.
   np->tf->eax = 0;
 
@@ -506,6 +511,44 @@ kill(int pid)
   }
   release(&ptable.lock);
   return -1;
+}
+
+/* Assignment 2 */
+uint
+sigprocmask(uint sigmask)
+{
+  struct proc *p = myproc();
+  uint prev;
+
+  if(p == 0)
+    panic("sigprocmask");
+
+  prev = p->sig_mask;
+  p->sig_mask = sigmask;
+  return prev;
+}
+
+sighandler_t
+signal(int signum, sighandler_t handler)
+{
+  struct proc *p = myproc();
+  sighandler_t prev;
+
+  if(p == 0)
+    panic("signal");
+
+  if (signum < 0 || signum >= 32)
+    return (sighandler_t)-1;
+
+  prev = p->sig_handlers[signum];
+  p->sig_handlers[signum] = handler;
+  return prev;
+}
+
+void
+sigret(void)
+{
+  // TODO
 }
 
 //PAGEBREAK: 36

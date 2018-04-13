@@ -18,6 +18,7 @@ exec(char *path, char **argv)
   struct proghdr ph;
   pde_t *pgdir, *oldpgdir;
   struct proc *curproc = myproc();
+  void **handler;  // For iteration over signal handlers (Assignment 2)
 
   begin_op();
 
@@ -92,6 +93,15 @@ exec(char *path, char **argv)
     if(*s == '/')
       last = s+1;
   safestrcpy(curproc->name, last, sizeof(curproc->name));
+
+  /* Assignment 2 */
+  // Return all custom signal handlers to default.
+  for (handler = curproc->sig_handlers; handler < &curproc->sig_handlers[32]; handler++) {
+    if (*handler == (void*)SIG_DFL || *handler == (void*)SIG_IGN) {
+      continue;
+    }
+    *handler = (void*)SIG_DFL;
+  }
 
   // Commit to the user image.
   oldpgdir = curproc->pgdir;
