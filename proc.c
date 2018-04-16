@@ -124,6 +124,12 @@ found:
   memset(p->context, 0, sizeof *p->context);
   p->context->eip = (uint)forkret;
 
+  /* Assignment 2 */
+  // Initialize signal-related fields.
+  p->pending_sigs = 0;
+  p->sig_mask = 0;
+  memset(p->sig_handlers, SIG_DFL, sizeof(p->sig_handlers));
+
   return p;
 }
 
@@ -538,7 +544,7 @@ signal(int signum, sighandler_t handler)
     panic("signal");
 
   if (signum < 0 || signum >= 32)
-    return (sighandler_t)-1;
+    return (sighandler_t)-2;
 
   prev = p->sig_handlers[signum];
   p->sig_handlers[signum] = handler;
