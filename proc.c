@@ -127,7 +127,7 @@ found:
   /* Assignment 2 */
   // Initialize signal-related fields.
   p->pending_sigs = 0;
-  p->sig_mask = 0;
+  p->sig_mask = -1;
   memset(p->sig_handlers, SIG_DFL, sizeof(p->sig_handlers));
 
   return p;
@@ -496,21 +496,17 @@ wakeup(void *chan)
   release(&ptable.lock);
 }
 
-// Kill the process with the given pid.
-// Process won't exit until it returns
-// to user space (see trap in trap.c).
+/* Assignment 2 */
+// Add the given signal to the process with the given pid's pending signals array.
 int
-kill(int pid)
+kill(int pid, int signum)
 {
   struct proc *p;
 
   acquire(&ptable.lock);
   for(p = ptable.proc; p < &ptable.proc[NPROC]; p++){
     if(p->pid == pid){
-      p->killed = 1;
-      // Wake process from sleep if necessary.
-      if(p->state == SLEEPING)
-        p->state = RUNNABLE;
+      p->pending_sigs |= 1 << signum;
       release(&ptable.lock);
       return 0;
     }
@@ -524,12 +520,7 @@ uint
 sigprocmask(uint sigmask)
 {
   struct proc *p = myproc();
-  uint prev;
-
-  if(p == 0)
-    panic("sigprocmask");
-
-  prev = p->sig_mask;
+  uint prev = p->sig_mask;
   p->sig_mask = sigmask;
   return prev;
 }
@@ -539,9 +530,6 @@ signal(int signum, sighandler_t handler)
 {
   struct proc *p = myproc();
   sighandler_t prev;
-
-  if(p == 0)
-    panic("signal");
 
   if (signum < 0 || signum >= 32)
     return (sighandler_t)-2;
@@ -555,6 +543,56 @@ void
 sigret(void)
 {
   // TODO
+}
+
+// Default SIGKILL handler.
+void sigkill(void) {
+  struct proc *p = myproc();
+
+  acquire(&ptable.lock);
+  p->killed = 1;
+  // Wake process from sleep if necessary.
+  if (p->state == SLEEPING) {
+    p->state = RUNNABLE;
+  }
+  release(&ptable.lock);
+}
+
+// Default SIGSTOP handler.
+void sigstop(void) {
+  struct proc *p = myproc();
+  p->suspended = 1;
+  yield();
+}
+
+// Default SIGCONT handler.
+void sigcont(void) {
+  struct proc *p = myproc();
+  p->suspended = 0;
+}
+
+// Execute default signal handlers. Called from trapret, before returning to user space.
+void handle_dfls() {
+  struct proc *p = myproc();
+  for (int i = 0; i < 32; i++) {
+    if (((p->pending_sigs & p->sig_mask) & (1 << i))
+        && (p->sig_handlers[i] == (void*)SIG_DFL)) {
+      // Execute the default behavior for this signal.
+      switch (i) {
+      case SIGSTOP:
+        sigstop();
+        break;
+      case SIGCONT:
+        sigcont();
+        break;
+      default:
+        sigkill();
+        break;
+      }
+      // Reset the pending signal bit.
+      p->pending_sigs ^= (1 << i);
+    }
+  }
 }
 
 //PAGEBREAK: 36

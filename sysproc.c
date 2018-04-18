@@ -30,10 +30,13 @@ int
 sys_kill(void)
 {
   int pid;
+  int signum;
 
   if(argint(0, &pid) < 0)
     return -1;
-  return kill(pid);
+  if (argint(1, &signum) < 0)
+    return -1;
+  return kill(pid, signum);
 }
 
 int
@@ -109,7 +112,7 @@ sys_signal(void)
 
   if (argint(0, &signum) < 0)
     return -1;
-  if (argptr(0, (char**)&handler, sizeof(sighandler_t)) < 0)
+  if (argptr(1, (char**)&handler, sizeof(sighandler_t)) < 0)
     return -1;
   return (int)signal(signum, handler);
 }

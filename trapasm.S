@@ -29,4 +29,8 @@ trapret:
   popl %es
   popl %ds
   addl $0x8, %esp  # trapno and errcode
+
+  # Assignment 2
+  call handle_dfls
+
   iret

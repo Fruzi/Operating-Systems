@@ -101,9 +101,12 @@ trap(struct trapframe *tf)
     exit();
 
   // Force process to give up CPU on clock tick.
+  // Assignment 2 - give up CPU if the process is suspended from a SIGSTOP signal
+  // and there is no pending SIGCONT signal.
   // If interrupts were on while locks held, would need to check nlock.
-  if(myproc() && myproc()->state == RUNNING &&
-     tf->trapno == T_IRQ0+IRQ_TIMER)
+  if(myproc() && myproc()->state == RUNNING
+     && (tf->trapno == T_IRQ0+IRQ_TIMER || (myproc()->suspended
+     && !((myproc()->pending_sigs & myproc()->sig_mask) & (1 << SIGCONT)))))
     yield();
 
   // Check if the process has been killed since we yielded

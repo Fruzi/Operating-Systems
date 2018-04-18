@@ -55,6 +55,7 @@ struct proc {
   uint sig_mask;               // Signal mask (32-bit array)
   void *sig_handlers[32];      // Signal handlers
   struct trapframe *user_tf_backup;    // Trapframe backup for user signal handling
+  int suspended;               // Set to 1 if SIGSTOP was received, reset to 0 if SIGCONT is received
 };
 
 /* Assignment 2 */
