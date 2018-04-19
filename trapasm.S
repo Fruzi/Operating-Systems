@@ -23,14 +23,14 @@ alltraps:
   # Return falls through to trapret...
 .globl trapret
 trapret:
+  # Assignment 2
+  call handle_ksignals
+
   popal
   popl %gs
   popl %fs
   popl %es
   popl %ds
   addl $0x8, %esp  # trapno and errcode
-
-  # Assignment 2
-  call handle_dfls
 
   iret

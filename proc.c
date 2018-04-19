@@ -129,6 +129,7 @@ found:
   p->pending_sigs = 0;
   p->sig_mask = -1;
   memset(p->sig_handlers, SIG_DFL, sizeof(p->sig_handlers));
+  p->suspended = 0;
 
   return p;
 }
@@ -359,6 +360,11 @@ scheduler(void)
       if(p->state != RUNNABLE)
         continue;
 
+      /* Assignment 2 */
+      // Choose a different process if p is suspended and a SIGCONT is not pending.
+      if (p->suspended && !((p->pending_sigs & p->sig_mask) & (1 << SIGCONT)))
+        continue;
+
       // Switch to chosen process.  It is the process's job
       // to release ptable.lock and then reacquire it
       // before jumping back to us.
@@ -506,7 +512,7 @@ kill(int pid, int signum)
   acquire(&ptable.lock);
   for(p = ptable.proc; p < &ptable.proc[NPROC]; p++){
     if(p->pid == pid){
-      p->pending_sigs |= 1 << signum;
+      p->pending_sigs |= (1 << signum);
       release(&ptable.lock);
       return 0;
     }
@@ -572,25 +578,31 @@ void sigcont(void) {
 }
 
 // Execute default signal handlers. Called from trapret, before returning to user space.
-void handle_dfls() {
+void handle_ksignals() {
   struct proc *p = myproc();
+  if (p == 0)
+    return;
+
   for (int i = 0; i < 32; i++) {
-    if (((p->pending_sigs & p->sig_mask) & (1 << i))
-        && (p->sig_handlers[i] == (void*)SIG_DFL)) {
-      // Execute the default behavior for this signal.
-      switch (i) {
-      case SIGSTOP:
-        sigstop();
-        break;
-      case SIGCONT:
-        sigcont();
-        break;
-      default:
-        sigkill();
-        break;
+    if ((p->pending_sigs & p->sig_mask) & (1 << i)) {
+      if (p->sig_handlers[i] == (void*)SIG_DFL) {
+        // Execute the default behavior for this signal.
+        switch (i) {
+        case SIGSTOP:
+          sigstop();
+          break;
+        case SIGCONT:
+          sigcont();
+          break;
+        default:
+          sigkill();
+          break;
+        }
+        // Reset the pending signal bit.
+        p->pending_sigs ^= (1 << i);
+      } else if (p->sig_handlers[i] == (void*)SIG_IGN) {
+        p->pending_sigs ^= (1 << i);
       }
-      // Reset the pending signal bit.
-      p->pending_sigs ^= (1 << i);
     }
   }
 }
