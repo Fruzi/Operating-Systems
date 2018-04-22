@@ -362,7 +362,7 @@ scheduler(void)
 
       /* Assignment 2 */
       // Choose a different process if p is suspended and a SIGCONT is not pending.
-      if (p->suspended && !((p->pending_sigs & p->sig_mask) & (1 << SIGCONT)))
+      if (p->suspended && !is_pending_sig(p, SIGCONT))
         continue;
 
       // Switch to chosen process.  It is the process's job
@@ -584,7 +584,7 @@ void handle_ksignals() {
     return;
 
   for (int i = 0; i < 32; i++) {
-    if ((p->pending_sigs & p->sig_mask) & (1 << i)) {
+    if (is_pending_sig(p, i)) {
       if (p->sig_handlers[i] == (void*)SIG_DFL) {
         // Execute the default behavior for this signal.
         switch (i) {

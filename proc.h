@@ -66,6 +66,8 @@ struct proc {
 #define SIGSTOP 17
 #define SIGCONT 19
 
+#define is_pending_sig(p, s) ((p->pending_sigs & p->sig_mask) & (1 << s))
+
 // Process memory is laid out contiguously, low addresses first:
 //   text
 //   original data and bss
