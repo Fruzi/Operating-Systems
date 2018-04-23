@@ -113,7 +113,7 @@ panic(char *s)
   cons.locking = 0;
   // use lapiccpunum so that we can call panic from mycpu()
   cprintf("lapicid %d: panic: ", lapicid());
-  cprintf(s);
+  cprintf("%s --- ncli: %d", s, mycpu()->ncli);
   cprintf("\n");
   getcallerpcs(&s, pcs);
   for(i=0; i<10; i++)
