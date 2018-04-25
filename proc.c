@@ -21,6 +21,7 @@ extern void forkret(void);
 extern void trapret(void);
 
 static void wakeup1(void *chan);
+//static void sleep1(void *chan, struct spinlock* lk);
 
 void
 pinit(void)
@@ -284,23 +285,26 @@ exit(void)
 
   /* Assignment 2 */
   pushcli();
-  if (cas(&curproc->state, RUNNING, -ZOMBIE)) {
-    // Parent might be sleeping in wait().
-    wakeup1(curproc->parent);
-
-    // Pass abandoned children to init.
-    for(p = ptable.proc; p < &ptable.proc[NPROC]; p++){
-      if(p->parent == curproc){
-        p->parent = initproc;
-        if(p->state == ZOMBIE)
-          wakeup1(initproc);
-      }
-    }
-
-    // Jump into the scheduler, never to return.
-    sched();
-    panic("zombie exit");
+  if (!cas(&curproc->state, RUNNING, -ZOMBIE)) {
+  	panic("exit: state should be RUNNING");
   }
+  // Parent might be sleeping in wait().
+  //DIFFF
+  wakeup1(curproc->parent);
+
+  // Pass abandoned children to init.
+  for(p = ptable.proc; p < &ptable.proc[NPROC]; p++){
+    if(p->parent == curproc){
+      p->parent = initproc;
+      if(p->state == ZOMBIE)
+        wakeup1(initproc);
+    }
+  }
+
+  // Jump into the scheduler, never to return.
+  sched();
+  panic("zombie exit");
+    
 }
 
 // Wait for a child process to exit and return its pid.
@@ -318,6 +322,8 @@ wait(void)
     if (!cas(&curproc->state, RUNNING, -SLEEPING)) {
       panic("wait: state should be RUNNING");
     }
+
+    curproc->chan = curproc;
     // Scan through table looking for exited children.
     havekids = 0;
     for(p = ptable.proc; p < &ptable.proc[NPROC]; p++){
@@ -339,20 +345,23 @@ wait(void)
       p->parent = 0;
       p->name[0] = 0;
       p->killed = 0;
-      p->state = UNUSED;
-      curproc->state = RUNNING;
+      cas(&p->state, -UNUSED, UNUSED);
+      curproc->chan = 0;
+      cas(&curproc->state, -SLEEPING, RUNNING);
       popcli();
       return pid;
     }
 
     // No point waiting if we don't have any children.
     if(!havekids || curproc->killed){
-      curproc->state = RUNNING;
+      curproc->chan = 0;
+      cas(&curproc->state, -SLEEPING, RUNNING);
       popcli();
       return -1;
     }
 
     // Wait for children to exit.  (See wakeup1 call in proc_exit.)
+    //sleep1(curproc, (struct spinlock*)-1);
     sched();
   }
 }
@@ -405,18 +414,15 @@ scheduler(void)
 
     swtch(&(c->scheduler), p->context);
     switchkvm();
-
+    
+    // Process is done running for now.
+    // It should have changed its p->state before coming back.
+    c->proc = 0;
     cas(&p->state, -RUNNABLE, RUNNABLE);
     cas(&p->state, -SLEEPING, SLEEPING);
     if (cas(&p->state, -ZOMBIE, ZOMBIE)) {
       wakeup1(p->parent);
     }
-
-    //cprintf("continue from sched: %d state: %d\n", p->pid, p->state);
-
-    // Process is done running for now.
-    // It should have changed its p->state before coming back.
-    c->proc = 0;
 
     popcli();
 
@@ -501,14 +507,16 @@ sleep(void *chan, struct spinlock *lk)
   // (wakeup runs with ptable.lock locked),
   // so it's okay to release lk.
   pushcli();
-  if(lk != &ptable.lock){
-    release(lk);
+
+  if (!cas(&p->state, RUNNING, -SLEEPING)) {
+    panic("sleep: state should be RUNNING");
   }
 
   // Go to sleep.
   p->chan = chan;
-  if (!cas(&p->state, RUNNING, -SLEEPING)) {
-    panic("sleep: state should be RUNNING");
+
+  if(lk != &ptable.lock){
+    release(lk);
   }
 
   sched();
@@ -520,6 +528,7 @@ sleep(void *chan, struct spinlock *lk)
   if(lk != &ptable.lock){  //DOC: sleeplock2
     acquire(lk);
   }
+
   popcli();
 }
 
@@ -531,16 +540,19 @@ wakeup1(void *chan)
 {
   struct proc *p;
 
-  for(p = ptable.proc; p < &ptable.proc[NPROC]; p++) {
-    if(abs(p->state) == SLEEPING && p->chan == chan) {
-      while (p->state == -SLEEPING);
-      if (cas(&p->state, SLEEPING, -RUNNABLE)) {
-        p->chan = 0;
-        if (!cas(&p->state, -RUNNABLE, RUNNABLE)) {
-          panic("wakeup1: state should be -RUNNABLE");
-        }
+  do {
+    for(p = ptable.proc; p < &ptable.proc[NPROC]; p++) {
+      if(abs(p->state) == SLEEPING && p->chan == chan) {
+        break;
       }
     }
+  } while (p < &ptable.proc[NPROC] && !cas(&p->state, SLEEPING, -RUNNABLE));
+  if (p == &ptable.proc[NPROC]) {
+    return;
+  }
+  p->chan = 0;
+  if (!cas(&p->state, -RUNNABLE, RUNNABLE)) {
+    panic("wakeup1: state should be -RUNNABLE");
   }
 }
 
