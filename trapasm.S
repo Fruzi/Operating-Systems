@@ -24,7 +24,7 @@ alltraps:
 .globl trapret
 trapret:
   # Assignment 2
-  call handle_ksignals
+  call handle_signals
 
   popal
   popl %gs

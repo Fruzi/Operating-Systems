@@ -20,8 +20,17 @@ int nextpid = 1;
 extern void forkret(void);
 extern void trapret(void);
 
+extern void handle_signals();
+extern uint sigret_start;
+extern uint sigret_end;
+asm (".globl sigret_start\n"
+     ".globl sigret_end\n"
+     "sigret_start:\n\t"
+     "movl $24, %eax\n\t"
+     "int $64\n"
+     "sigret_end:");
+
 static void wakeup1(void *chan);
-//static void sleep1(void *chan, struct spinlock* lk);
 
 void
 pinit(void)
@@ -98,11 +107,10 @@ allocproc(void)
   pushcli();
   do {
     for(p = ptable.proc; p < &ptable.proc[NPROC]; p++) {
-      if(p->state == UNUSED) {
+      if(abs(p->state) == UNUSED) {
         break;
       }
     }
-
     if (p == &ptable.proc[NPROC]) {
       popcli();
       return 0;
@@ -304,7 +312,7 @@ exit(void)
   // Jump into the scheduler, never to return.
   sched();
   panic("zombie exit");
-    
+
 }
 
 // Wait for a child process to exit and return its pid.
@@ -361,7 +369,6 @@ wait(void)
     }
 
     // Wait for children to exit.  (See wakeup1 call in proc_exit.)
-    //sleep1(curproc, (struct spinlock*)-1);
     sched();
   }
 }
@@ -392,7 +399,6 @@ scheduler(void)
     do {
       found = 0;
       for(p = ptable.proc; p < &ptable.proc[NPROC]; p++){
-        //cprintf("%d: state %d\n", p->pid, p->state);
         if(p->state == RUNNABLE
            /* Assignment 2 */
            // Choose a different process if p is suspended and a SIGCONT is not pending.
@@ -406,6 +412,7 @@ scheduler(void)
       popcli();
       continue;
     }
+
     // Switch to chosen process.  It is the process's job
     // to release ptable.lock and then reacquire it
     // before jumping back to us.
@@ -419,7 +426,11 @@ scheduler(void)
     // It should have changed its p->state before coming back.
     c->proc = 0;
     cas(&p->state, -RUNNABLE, RUNNABLE);
-    cas(&p->state, -SLEEPING, SLEEPING);
+    if (cas(&p->state, -SLEEPING, SLEEPING)) {
+      if (p->killed || is_pending_sig(p, SIGKILL)) {
+        cas(&p->state, SLEEPING, RUNNABLE);
+      }
+    }
     if (cas(&p->state, -ZOMBIE, ZOMBIE)) {
       wakeup1(p->parent);
     }
@@ -448,6 +459,7 @@ sched(void)
     panic("sched running");
   if(readeflags()&FL_IF)
     panic("sched interruptible");
+
   intena = mycpu()->intena;
   swtch(&p->context, mycpu()->scheduler);
   mycpu()->intena = intena;
@@ -461,7 +473,6 @@ yield(void)
   if (!cas(&myproc()->state, RUNNING, -RUNNABLE)) {
     panic("yield: state should be RUNNING");
   }
-  //cprintf("calling sched from yield: %d\n", myproc()->pid);
   sched();
   popcli();
 }
@@ -608,7 +619,7 @@ signal(int signum, sighandler_t handler)
 void
 sigret(void)
 {
-  // TODO
+  memmove(myproc()->tf, myproc()->user_tf_backup, sizeof(struct trapframe));
 }
 
 // Default SIGKILL handler.
@@ -630,8 +641,22 @@ void sigcont(void) {
   p->suspended = 0;
 }
 
+void execute_user_signal_handler(int signum) {
+  struct proc *p = myproc();
+  void *handler = p->sig_handlers[signum];
+
+  memmove(p->user_tf_backup, p->tf, sizeof(struct trapframe));
+
+  p->tf->esp -= (uint)&sigret_end - (uint)&sigret_start;
+  memmove((void*)p->tf->esp, (void*)sigret_start, (uint)&sigret_end - (uint)&sigret_start);
+  *((int*)(p->tf->esp - 4)) = signum;
+  *((int*)(p->tf->esp - 8)) = p->tf->esp;
+  p->tf->esp -= 8;
+  p->tf->eip = (uint)handler;
+}
+
 // Execute default signal handlers. Called from trapret, before returning to user space.
-void handle_ksignals() {
+void handle_signals() {
   struct proc *p = myproc();
   if (p == 0)
     return;
@@ -651,11 +676,13 @@ void handle_ksignals() {
           sigkill();
           break;
         }
-        // Reset the pending signal bit.
-        p->pending_sigs ^= (1 << i);
       } else if (p->sig_handlers[i] == (void*)SIG_IGN) {
-        p->pending_sigs ^= (1 << i);
+        // Ignore this signal.
+      } else {
+        execute_user_signal_handler(i);
       }
+      // Reset the pending signal bit.
+      p->pending_sigs ^= (1 << i);
     }
   }
 }
