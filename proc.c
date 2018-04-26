@@ -184,11 +184,11 @@ userinit(void)
   // writes to be visible, and the lock is also needed
   // because the assignment might not be atomic.
   /* Assignment 2 */
-  pushcli();
+  //pushcli();
   if (!cas(&p->state, EMBRYO, RUNNABLE)) {
     panic("userinit: state should be EMBRYO");
   }
-  popcli();
+  //popcli();
 }
 
 // Grow current process's memory by n bytes.
@@ -256,11 +256,11 @@ fork(void)
   pid = np->pid;
 
   /* Assignment 2 */
-  pushcli();
+  //pushcli();
   if (!cas(&np->state, EMBRYO, RUNNABLE)) {
     panic("fork: state should be EMBRYO");
   }
-  popcli();
+  //popcli();
 
   return pid;
 }
@@ -304,7 +304,7 @@ exit(void)
   for(p = ptable.proc; p < &ptable.proc[NPROC]; p++){
     if(p->parent == curproc){
       p->parent = initproc;
-      if(p->state == ZOMBIE)
+      if(abs(p->state) == ZOMBIE)
         wakeup1(initproc);
     }
   }
@@ -521,16 +521,16 @@ sleep(void *chan, struct spinlock *lk)
   // so it's okay to release lk.
   pushcli();
 
+  if(lk != &ptable.lock){
+    release(lk);
+  }
+
   if (!cas(&p->state, RUNNING, -SLEEPING)) {
     panic("sleep: state should be RUNNING");
   }
 
   // Go to sleep.
   p->chan = chan;
-
-  if(lk != &ptable.lock){
-    release(lk);
-  }
 
   sched();
 
