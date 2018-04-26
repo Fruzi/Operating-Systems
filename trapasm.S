@@ -24,7 +24,9 @@ alltraps:
 .globl trapret
 trapret:
   # Assignment 2
+  pushl %esp
   call handle_signals
+  addl $4, %esp
 
   popal
   popl %gs

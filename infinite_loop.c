@@ -1,4 +1,8 @@
+#include "types.h"
+#include "stat.h"
+#include "user.h"
+
 int main() {
   for (;;);
-  return 0;
+  exit();
 }

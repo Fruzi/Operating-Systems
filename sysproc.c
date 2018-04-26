@@ -120,7 +120,6 @@ sys_signal(void)
 int
 sys_sigret(void)
 {
-  // TODO
-  return -1;
-  //
+  sigret();
+  return 0;
 }

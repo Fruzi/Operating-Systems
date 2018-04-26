@@ -34,6 +34,42 @@ struct context {
 
 enum procstate { UNUSED, EMBRYO, SLEEPING, RUNNABLE, RUNNING, ZOMBIE };
 
+/* Assignment 2 */
+struct trapframebackup {
+  // registers as pushed by pusha
+  uint edi;
+  uint esi;
+  uint ebp;
+  uint oesp;      // useless & ignored
+  uint ebx;
+  uint edx;
+  uint ecx;
+  uint eax;
+
+  // rest of trap frame
+  ushort gs;
+  ushort padding1;
+  ushort fs;
+  ushort padding2;
+  ushort es;
+  ushort padding3;
+  ushort ds;
+  ushort padding4;
+  uint trapno;
+
+  // below here defined by x86 hardware
+  uint err;
+  uint eip;
+  ushort cs;
+  ushort padding5;
+  uint eflags;
+
+  // below here only when crossing rings, such as from user to kernel
+  uint esp;
+  ushort ss;
+  ushort padding6;
+};
+
 // Per-process state
 struct proc {
   uint sz;                     // Size of process memory (bytes)
@@ -53,8 +89,9 @@ struct proc {
   /* Assignment 2 */
   uint pending_sigs;           // Pending signals (32-bit array)
   uint sig_mask;               // Signal mask (32-bit array)
+  uint sig_mask_backup;        // Backup signal mask to restore to after signal handling
   void *sig_handlers[32];      // Signal handlers
-  struct trapframe *user_tf_backup;    // Trapframe backup for user signal handling
+  struct trapframebackup user_tf_backup;   // Trapframe backup for user signal handling
   int suspended;               // Set to 1 if SIGSTOP was received, reset to 0 if SIGCONT is received
 };
 

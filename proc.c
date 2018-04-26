@@ -334,17 +334,19 @@ wait(void)
     curproc->chan = curproc;
     // Scan through table looking for exited children.
     havekids = 0;
-    for(p = ptable.proc; p < &ptable.proc[NPROC]; p++){
-      if(p->parent != curproc)
-        continue;
-      havekids = 1;
-      if(p->state == ZOMBIE){
-        // Found one.
-        break;
+    do {
+      for(p = ptable.proc; p < &ptable.proc[NPROC]; p++){
+        if(p->parent != curproc)
+          continue;
+        havekids = 1;
+        if(abs(p->state) == ZOMBIE){
+          // Found one.
+          break;
+        }
       }
-    }
-    if (havekids && p < &ptable.proc[NPROC]
-        && cas(&p->state, ZOMBIE, -UNUSED)) {
+    } while (p < &ptable.proc[NPROC] && !cas(&p->state, ZOMBIE, -UNUSED));
+
+    if (havekids && p < &ptable.proc[NPROC]) {
       pid = p->pid;
       kfree(p->kstack);
       p->kstack = 0;
@@ -619,19 +621,23 @@ signal(int signum, sighandler_t handler)
 void
 sigret(void)
 {
-  memmove(myproc()->tf, myproc()->user_tf_backup, sizeof(struct trapframe));
+  struct proc *p = myproc();
+  memmove(p->tf, &p->user_tf_backup, sizeof(struct trapframebackup));
+  sigprocmask(p->sig_mask_backup);
 }
 
 // Default SIGKILL handler.
 void sigkill(void) {
   struct proc *p = myproc();
   p->killed = 1;
+  sigprocmask(p->sig_mask_backup);
 }
 
 // Default SIGSTOP handler.
 void sigstop(void) {
   struct proc *p = myproc();
   p->suspended = 1;
+  sigprocmask(p->sig_mask_backup);
   yield();
 }
 
@@ -639,30 +645,35 @@ void sigstop(void) {
 void sigcont(void) {
   struct proc *p = myproc();
   p->suspended = 0;
+  sigprocmask(p->sig_mask_backup);
 }
 
 void execute_user_signal_handler(int signum) {
   struct proc *p = myproc();
   void *handler = p->sig_handlers[signum];
 
-  memmove(p->user_tf_backup, p->tf, sizeof(struct trapframe));
+  memmove(&p->user_tf_backup, p->tf, sizeof(struct trapframe));
 
   p->tf->esp -= (uint)&sigret_end - (uint)&sigret_start;
-  memmove((void*)p->tf->esp, (void*)sigret_start, (uint)&sigret_end - (uint)&sigret_start);
-  *((int*)(p->tf->esp - 4)) = signum;
-  *((int*)(p->tf->esp - 8)) = p->tf->esp;
-  p->tf->esp -= 8;
+  memmove((void*)p->tf->esp, (void*)&sigret_start, (uint)&sigret_end - (uint)&sigret_start);
+  *((uint*)(p->tf->esp - 1 * sizeof(uint))) = signum;
+  *((uint*)(p->tf->esp - 2 * sizeof(uint))) = p->tf->esp;
+  p->tf->esp -= 2 * sizeof(uint);
   p->tf->eip = (uint)handler;
 }
 
 // Execute default signal handlers. Called from trapret, before returning to user space.
-void handle_signals() {
+void handle_signals(struct trapframe *tf) {
   struct proc *p = myproc();
+
   if (p == 0)
     return;
 
   for (int i = 0; i < 32; i++) {
     if (is_pending_sig(p, i)) {
+      // Block other signals.
+      p->sig_mask_backup = sigprocmask(0);
+
       if (p->sig_handlers[i] == (void*)SIG_DFL) {
         // Execute the default behavior for this signal.
         switch (i) {
@@ -681,6 +692,7 @@ void handle_signals() {
       } else {
         execute_user_signal_handler(i);
       }
+
       // Reset the pending signal bit.
       p->pending_sigs ^= (1 << i);
     }
