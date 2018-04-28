@@ -70,7 +70,7 @@ sys_sleep(void)
   acquire(&tickslock);
   ticks0 = ticks;
   while(ticks - ticks0 < n){
-    if(myproc()->killed){
+    if(myproc()->killed || is_pending_sig(myproc(), SIGKILL)){
       release(&tickslock);
       return -1;
     }
