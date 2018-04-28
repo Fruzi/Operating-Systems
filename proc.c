@@ -20,6 +20,7 @@ int nextpid = 1;
 extern void forkret(void);
 extern void trapret(void);
 
+/* Assignment 2 */
 extern uint sigret_start;
 extern uint sigret_end;
 asm (".globl sigret_start\n"
@@ -30,6 +31,9 @@ asm (".globl sigret_start\n"
      "sigret_end:");
 
 static void wakeup1(void *chan);
+
+/* Assignment 2 */
+static void sleep1(void *chan);
 
 void
 pinit(void)
@@ -317,19 +321,15 @@ wait(void)
   /* Assignment 2 */
   pushcli();
   for(;;){
-    if (!cas(&curproc->state, RUNNING, -SLEEPING)) {
-      panic("wait: state should be RUNNING");
-    }
-    curproc->chan = curproc;
-
     // Scan through table looking for exited children.
     havekids = 0;
     for(p = ptable.proc; p < &ptable.proc[NPROC]; p++){
       if(p->parent != curproc)
         continue;
       havekids = 1;
-      while (p->state == -ZOMBIE);
-      if(cas(&p->state, ZOMBIE, UNUSED)){
+      if (abs(p->state) == ZOMBIE) {
+        while (p->state == -ZOMBIE);
+        cas(&p->state, ZOMBIE, UNUSED);
         // Found one.
         pid = p->pid;
         kfree(p->kstack);
@@ -339,8 +339,6 @@ wait(void)
         p->parent = 0;
         p->name[0] = 0;
         p->killed = 0;
-        curproc->chan = 0;
-        cas(&curproc->state, -SLEEPING, RUNNING);
         popcli();
         return pid;
       }
@@ -348,14 +346,12 @@ wait(void)
 
     // No point waiting if we don't have any children.
     if(!havekids || curproc->killed){
-      curproc->chan = 0;
-      cas(&curproc->state, -SLEEPING, RUNNING);
       popcli();
       return -1;
     }
 
     // Wait for children to exit.  (See wakeup1 call in proc_exit.)
-    sched();
+    sleep1(curproc);
   }
 }
 
@@ -470,13 +466,33 @@ forkret(void)
   // Return to "caller", actually trapret (see allocproc).
 }
 
+/* Assignment 2 */
+// Sleep on chan.
+// Must have done pushcli().
+static void
+sleep1(void *chan)
+{
+  struct proc *p = myproc();
+
+  p->chan = chan;
+
+  if (!cas(&p->state, RUNNING, -SLEEPING)) {
+    panic("sleep: state should be RUNNING");
+  }
+
+  sched();
+
+  // Tidy up.
+  p->chan = 0;
+}
+
 // Atomically release lock and sleep on chan.
 // Reacquires lock when awakened.
 void
 sleep(void *chan, struct spinlock *lk)
 {
   struct proc *p = myproc();
-  
+
   if(p == 0)
     panic("sleep");
 
@@ -494,15 +510,11 @@ sleep(void *chan, struct spinlock *lk)
   // Go to sleep.
   p->chan = chan;
 
-  if (!cas(&p->state, RUNNING, -SLEEPING)) {
-    panic("sleep: state should be RUNNING");
-  }
-
   if(lk != &ptable.lock){
     release(lk);
   }
 
-  sched();
+  sleep1(chan);
 
   // Reacquire original lock.
   if(lk != &ptable.lock){  //DOC: sleeplock2
@@ -521,7 +533,7 @@ wakeup1(void *chan)
   struct proc *p;
 
   for (p = ptable.proc; p < &ptable.proc[NPROC]; p++) {
-    if (p->chan && p->chan == chan) {
+    if (p->chan == chan) {
       while (!cas(&p->state, SLEEPING, -RUNNABLE));
       p->chan = 0;
       cas(&p->state, -RUNNABLE, RUNNABLE);
