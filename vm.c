@@ -390,3 +390,19 @@ copyout(pde_t *pgdir, uint va, void *p, uint len)
 //PAGEBREAK!
 // Blank page.
 
+/* Assignment 3 */
+int handle_pgflt(uint va) {
+  struct proc* p = myproc();
+  pde_t* pde;
+  pte_t* pgtab;
+  pte_t* pte;
+
+  if ((pte = walkpgdir(p->pgdir, (void*)va, 0))) {
+    if (*pte & PTE_PG) {
+      // Page in the page the contains va.
+      // Page out if the process has MAX_PSYC_PAGES pages in main memory.
+      return 1;
+    }
+  }
+  return 0;
+}

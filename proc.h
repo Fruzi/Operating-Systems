@@ -34,6 +34,15 @@ struct context {
 
 enum procstate { UNUSED, EMBRYO, SLEEPING, RUNNABLE, RUNNING, ZOMBIE };
 
+/* Assignment 3 */
+#define MAX_PSYC_PAGES 16
+#define MAX_TOTAL_PAGES 32
+
+struct swapFileEntry {
+  uint va;      // Virtual address of page
+  uint offest;  // Offset in swap file
+};
+
 // Per-process state
 struct proc {
   uint sz;                     // Size of process memory (bytes)
@@ -52,6 +61,7 @@ struct proc {
 
   //Swap file. must initiate with create swap file
   struct file *swapFile;      //page file
+  struct swapFileEntry swapFileTable[MAX_TOTAL_PAGES - MAX_PSYC_PAGES]
 };
 
 // Process memory is laid out contiguously, low addresses first:

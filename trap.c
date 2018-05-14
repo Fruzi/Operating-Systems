@@ -78,6 +78,12 @@ trap(struct trapframe *tf)
     lapiceoi();
     break;
 
+  /* Assignment 3 */
+  case T_PGFLT:
+    if (handle_pgflt(rcr2())) {
+      break;
+    }
+
   //PAGEBREAK: 13
   default:
     if(myproc() == 0 || (tf->cs&3) == 0){
