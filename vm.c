@@ -221,6 +221,7 @@ loaduvm(pde_t *pgdir, char *addr, struct inode *ip, uint offset, uint sz)
 int
 allocuvm(pde_t *pgdir, uint oldsz, uint newsz)
 {
+  struct proc *p = myproc();
   char *mem;
   uint a;
 
@@ -231,6 +232,10 @@ allocuvm(pde_t *pgdir, uint oldsz, uint newsz)
 
   a = PGROUNDUP(oldsz);
   for(; a < newsz; a += PGSIZE){
+    /* Assignment 3 */
+    if (p->current_psyc_pages == MAX_PSYC_PAGES) {
+      page_out();
+    }
     mem = kalloc();
     if(mem == 0){
       cprintf("allocuvm out of memory\n");
@@ -391,18 +396,82 @@ copyout(pde_t *pgdir, uint va, void *p, uint len)
 // Blank page.
 
 /* Assignment 3 */
+pte_t* select_page(void) {
+  //struct proc *p = myproc();
+  //pte_t *pte;
+
+  #ifdef NFUA
+
+
+  #endif // NFUA
+  #ifdef LAPA
+
+
+  #endif // LAPA
+  #ifdef SCFIFO
+
+
+  #endif // SCFIFO
+  #ifdef AQ
+
+
+  #endif // AQ
+
+  return (pte_t*)0;
+}
+
+int page_in(uint va) {
+  struct proc *p = myproc();
+  pte_t *pte;
+  char *mem;
+
+  struct swapFileEntry *sfe;
+  for (sfe = p->swapFileTable; sfe < &p->swapFileTable[MAX_SWAP_PAGES]; sfe++) {
+    if (sfe->va == va) {
+      mem = kalloc();
+      memset(mem, 0, PGSIZE);
+      readFromSwapFile(p, mem, sfe->offset, PGSIZE);
+      pte = walkpgdir(p->pgdir, (void*)va, 0);
+      *pte = V2P(mem) | PTE_P | PTE_W | PTE_U;
+      *pte &= ~PTE_PG;
+      sfe->va = -1;
+      return 0;
+    }
+  }
+  return -1;
+}
+
+int page_out(void) {
+  struct proc *p = myproc();
+  pte_t *pte = select_page();
+
+  struct swapFileEntry *sfe;
+  struct swapFileEntry *prev_sfe = 0;
+  for (sfe = p->swapFileTable; sfe < &p->swapFileTable[MAX_SWAP_PAGES]; sfe++) {
+    if (sfe->va == -1) {
+      sfe->va = (uint)P2V(PTE_ADDR(*pte));
+      sfe->offset = prev_sfe ? prev_sfe->offset + PGSIZE : 0;
+      writeToSwapFile(p, (void*)sfe->va, sfe->offset, PGSIZE);
+      *pte &= ~PTE_P;
+      *pte |= PTE_PG;
+      kfree((char*)sfe->va);
+      return 0;
+    }
+    prev_sfe = sfe;
+  }
+  return -1;
+}
+
 int handle_pgflt(uint va) {
   struct proc* p = myproc();
-  pde_t* pde;
-  pte_t* pgtab;
   pte_t* pte;
 
   if ((pte = walkpgdir(p->pgdir, (void*)va, 0))) {
     if (*pte & PTE_PG) {
       // Page in the page the contains va.
       // Page out if the process has MAX_PSYC_PAGES pages in main memory.
-      return 1;
+      return 0;
     }
   }
-  return 0;
+  return -1;
 }

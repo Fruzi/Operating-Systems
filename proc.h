@@ -37,10 +37,11 @@ enum procstate { UNUSED, EMBRYO, SLEEPING, RUNNABLE, RUNNING, ZOMBIE };
 /* Assignment 3 */
 #define MAX_PSYC_PAGES 16
 #define MAX_TOTAL_PAGES 32
+#define MAX_SWAP_PAGES (MAX_TOTAL_PAGES - MAX_PSYC_PAGES + 1)
 
 struct swapFileEntry {
-  uint va;      // Virtual address of page
-  uint offest;  // Offset in swap file
+  uint va;      // Virtual address of page. -1 if unused
+  uint offset;  // Offset in swap file
 };
 
 // Per-process state
@@ -61,7 +62,14 @@ struct proc {
 
   //Swap file. must initiate with create swap file
   struct file *swapFile;      //page file
-  struct swapFileEntry swapFileTable[MAX_TOTAL_PAGES - MAX_PSYC_PAGES]
+
+  /* Assignment 3 */
+  struct swapFileEntry swapFileTable[MAX_SWAP_PAGES];
+  uint current_psyc_pages;      // Number of pages currently in physical memory
+  uint total_alloc_pages;       // Total number of allocated pages
+  uint current_paged_out_count; // Number of pages that are currently paged out
+  uint pf_count;                // Total number of page faults
+  uint total_page_out_count;    // Total number of page-outs
 };
 
 // Process memory is laid out contiguously, low addresses first:
