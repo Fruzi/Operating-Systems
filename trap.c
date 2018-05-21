@@ -80,7 +80,7 @@ trap(struct trapframe *tf)
 
   /* Assignment 3 */
   case T_PGFLT:
-    if (handle_pgflt(rcr2()) == 0) {
+    if (myproc() && handle_pgflt(rcr2()) == 0) {
       break;
     }
 

@@ -65,11 +65,15 @@ struct proc {
 
   /* Assignment 3 */
   struct swapFileEntry swapFileTable[MAX_SWAP_PAGES];
-  uint current_psyc_pages;      // Number of pages currently in physical memory
-  uint total_alloc_pages;       // Total number of allocated pages
-  uint current_paged_out_count; // Number of pages that are currently paged out
-  uint pf_count;                // Total number of page faults
-  uint total_page_out_count;    // Total number of page-outs
+  #ifdef SCFIFO
+  uint clock_hand;                  // Index into allocd_vas
+  #endif // SCFIFO
+  uint allocd_vas[MAX_PSYC_PAGES];  // Virtual addresses of pages currently in physical memory
+  uint current_psyc_pages;          // Number of pages currently in physical memory
+  uint total_alloc_pages;           // Total number of allocated pages
+  uint current_paged_out_count;     // Number of pages that are currently paged out
+  uint pf_count;                    // Total number of page faults
+  uint total_page_out_count;        // Total number of page-outs
 };
 
 // Process memory is laid out contiguously, low addresses first:

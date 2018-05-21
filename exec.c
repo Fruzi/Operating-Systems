@@ -38,6 +38,21 @@ exec(char *path, char **argv)
   if((pgdir = setupkvm()) == 0)
     goto bad;
 
+  /* Assignment 3 */
+  // Reset swap file and metadata
+  removeSwapFile(curproc);
+  createSwapFile(curproc);
+  memset(curproc->swapFileTable, -1, sizeof(curproc->swapFileTable));
+  memset(curproc->allocd_vas, -1, sizeof(curproc->allocd_vas));
+  #ifdef SCFIFO
+  curproc->clock_hand = 0;
+  #endif // SCFIFO
+  curproc->current_psyc_pages = 0;
+  curproc->total_alloc_pages = 0;
+  curproc->current_paged_out_count = 0;
+  curproc->pf_count = 0;
+  curproc->total_page_out_count = 0;
+
   // Load program into memory.
   sz = 0;
   for(i=0, off=elf.phoff; i<elf.phnum; i++, off+=sizeof(ph)){

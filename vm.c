@@ -224,6 +224,7 @@ allocuvm(pde_t *pgdir, uint oldsz, uint newsz)
   struct proc *p = myproc();
   char *mem;
   uint a;
+  uint *allocd_va;
 
   if(newsz >= KERNBASE)
     return 0;
@@ -249,6 +250,15 @@ allocuvm(pde_t *pgdir, uint oldsz, uint newsz)
       kfree(mem);
       return 0;
     }
+    /* Assignment 3 */
+    for (allocd_va = p->allocd_vas; allocd_va < &p->allocd_vas[MAX_PSYC_PAGES]; allocd_va++) {
+      if (*allocd_va == -1) {
+        *allocd_va = a;
+        break;
+      }
+    }
+    p->current_psyc_pages++;
+    p->total_alloc_pages++;
   }
   return newsz;
 }
@@ -260,8 +270,10 @@ allocuvm(pde_t *pgdir, uint oldsz, uint newsz)
 int
 deallocuvm(pde_t *pgdir, uint oldsz, uint newsz)
 {
+  struct proc *p = myproc();
   pte_t *pte;
   uint a, pa;
+  uint *allocd_va;
 
   if(newsz >= oldsz)
     return oldsz;
@@ -278,6 +290,13 @@ deallocuvm(pde_t *pgdir, uint oldsz, uint newsz)
       char *v = P2V(pa);
       kfree(v);
       *pte = 0;
+      for (allocd_va = p->allocd_vas; allocd_va < &p->allocd_vas[MAX_PSYC_PAGES]; allocd_va++) {
+        if (*allocd_va == a) {
+          *allocd_va = -1;
+          break;
+        }
+      }
+      p->current_psyc_pages--;
     }
   }
   return newsz;
@@ -330,15 +349,23 @@ copyuvm(pde_t *pgdir, uint sz)
   for(i = 0; i < sz; i += PGSIZE){
     if((pte = walkpgdir(pgdir, (void *) i, 0)) == 0)
       panic("copyuvm: pte should exist");
-    if(!(*pte & PTE_P))
-      panic("copyuvm: page not present");
-    pa = PTE_ADDR(*pte);
-    flags = PTE_FLAGS(*pte);
-    if((mem = kalloc()) == 0)
-      goto bad;
-    memmove(mem, (char*)P2V(pa), PGSIZE);
-    if(mappages(d, (void*)i, PGSIZE, V2P(mem), flags) < 0)
-      goto bad;
+    if(!(*pte & PTE_P)) {
+      /* Assignment 3 */
+      if (!(*pte & PTE_PG)) {
+        panic("copyuvm: page not present and not swapped out");
+      }
+      flags = PTE_FLAGS(*pte);
+      if(mappages(d, (void*)i, PGSIZE, -1, flags) < 0)
+        goto bad;
+    } else {
+      pa = PTE_ADDR(*pte);
+      flags = PTE_FLAGS(*pte);
+      if((mem = kalloc()) == 0)
+        goto bad;
+      memmove(mem, (char*)P2V(pa), PGSIZE);
+      if(mappages(d, (void*)i, PGSIZE, V2P(mem), flags) < 0)
+        goto bad;
+    }
   }
   return d;
 
@@ -396,9 +423,10 @@ copyout(pde_t *pgdir, uint va, void *p, uint len)
 // Blank page.
 
 /* Assignment 3 */
-pte_t* select_page(void) {
-  //struct proc *p = myproc();
-  //pte_t *pte;
+uint* select_page(void) {
+  struct proc *p = myproc();
+  pte_t *pte;
+  uint *allocd_va = 0;
 
   #ifdef NFUA
 
@@ -409,32 +437,46 @@ pte_t* select_page(void) {
 
   #endif // LAPA
   #ifdef SCFIFO
-
-
+  while (p->allocd_vas[p->clock_hand] == -1) {
+    cprintf("problem?\n");
+    p->clock_hand = (p->clock_hand + 1) % MAX_PSYC_PAGES;
+  }
+  pte = walkpgdir(p->pgdir, (void*)p->allocd_vas[p->clock_hand], 0);
+  while (*pte & PTE_A) {
+    *pte &= ~PTE_A;
+    p->clock_hand = (p->clock_hand + 1) % MAX_PSYC_PAGES;
+    pte = walkpgdir(p->pgdir, (void*)p->allocd_vas[p->clock_hand], 0);
+  }
+  allocd_va = &p->allocd_vas[p->clock_hand];
+  p->clock_hand = (p->clock_hand + 1) % MAX_PSYC_PAGES;
   #endif // SCFIFO
   #ifdef AQ
 
 
   #endif // AQ
 
-  return (pte_t*)0;
+  return allocd_va;
 }
 
 int page_in(uint va) {
   struct proc *p = myproc();
   pte_t *pte;
   char *mem;
-
   struct swapFileEntry *sfe;
+
+  va = PGROUNDDOWN(va);
+  cprintf("in page_in: pid %d va %d\n", p->pid, va);
+
   for (sfe = p->swapFileTable; sfe < &p->swapFileTable[MAX_SWAP_PAGES]; sfe++) {
+    cprintf("sfe->va %d\n", sfe->va);
     if (sfe->va == va) {
-      mem = kalloc();
-      memset(mem, 0, PGSIZE);
-      readFromSwapFile(p, mem, sfe->offset, PGSIZE);
+      allocuvm(p->pgdir, va, va + PGSIZE);
       pte = walkpgdir(p->pgdir, (void*)va, 0);
-      *pte = V2P(mem) | PTE_P | PTE_W | PTE_U;
-      *pte &= ~PTE_PG;
+      mem = (char*)(P2V(PTE_ADDR(*pte)));
+      readFromSwapFile(p, mem, sfe->offset, PGSIZE);
+      *pte = (V2P(mem) | PTE_FLAGS(*pte)) & ~PTE_PG;
       sfe->va = -1;
+      p->current_paged_out_count--;
       return 0;
     }
   }
@@ -443,18 +485,25 @@ int page_in(uint va) {
 
 int page_out(void) {
   struct proc *p = myproc();
-  pte_t *pte = select_page();
+  uint *allocd_va = select_page();
+  uint va = *allocd_va;
+  pte_t *pte = walkpgdir(p->pgdir, (void*)va, 0);
+  char *mem = (char*)(P2V(PTE_ADDR(*pte)));
+
+  cprintf("in page_out: pid %d va %d\n", p->pid, va);
 
   struct swapFileEntry *sfe;
   struct swapFileEntry *prev_sfe = 0;
   for (sfe = p->swapFileTable; sfe < &p->swapFileTable[MAX_SWAP_PAGES]; sfe++) {
     if (sfe->va == -1) {
-      sfe->va = (uint)P2V(PTE_ADDR(*pte));
+      sfe->va = va;
       sfe->offset = prev_sfe ? prev_sfe->offset + PGSIZE : 0;
-      writeToSwapFile(p, (void*)sfe->va, sfe->offset, PGSIZE);
-      *pte &= ~PTE_P;
-      *pte |= PTE_PG;
-      kfree((char*)sfe->va);
+      writeToSwapFile(p, mem, sfe->offset, PGSIZE);
+      deallocuvm(p->pgdir, va + PGSIZE, va);
+      *pte = V2P(mem) | PTE_FLAGS(*pte) | PTE_PG;
+      lcr3(V2P(p->pgdir));  // switch to process's address space
+      p->current_paged_out_count++;
+      p->total_page_out_count++;
       return 0;
     }
     prev_sfe = sfe;
@@ -466,10 +515,21 @@ int handle_pgflt(uint va) {
   struct proc* p = myproc();
   pte_t* pte;
 
+  cprintf("in handle_pgflt: pid %d va %d\n", p->pid, va);
+
   if ((pte = walkpgdir(p->pgdir, (void*)va, 0))) {
+    cprintf("pte %x present %d PG %d\n", pte, *pte & PTE_P, *pte & PTE_PG);
     if (*pte & PTE_PG) {
-      // Page in the page the contains va.
       // Page out if the process has MAX_PSYC_PAGES pages in main memory.
+      // Page in the page the contains va.
+      cprintf("handling page fault: pid %d va %d\n", p->pid, va);
+      if (p->current_psyc_pages == MAX_PSYC_PAGES) {
+        if (page_out() == -1)
+          panic("handle_pgflt, page_out");
+      }
+      if (page_in(va) == -1)
+        panic("handle_pgflt, page_in");
+      p->pf_count++;
       return 0;
     }
   }

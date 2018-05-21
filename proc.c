@@ -112,6 +112,18 @@ found:
   memset(p->context, 0, sizeof *p->context);
   p->context->eip = (uint)forkret;
 
+  /* Assignment 3 */
+  p->swapFile = 0;
+  memset(p->swapFileTable, -1, sizeof(p->swapFileTable));
+  memset(p->allocd_vas, -1, sizeof(p->allocd_vas));
+  #ifdef SCFIFO
+  p->clock_hand = 0;
+  #endif // SCFIFO
+  p->current_psyc_pages = 0;
+  p->total_alloc_pages = 0;
+  p->current_paged_out_count = 0;
+  p->pf_count = 0;
+  p->total_page_out_count = 0;
   return p;
 }
 
@@ -183,6 +195,8 @@ fork(void)
   int i, pid;
   struct proc *np;
   struct proc *curproc = myproc();
+  char buf[1024] = {0};
+  uint offset;
 
   // Allocate process.
   if((np = allocproc()) == 0){
@@ -211,6 +225,28 @@ fork(void)
   safestrcpy(np->name, curproc->name, sizeof(curproc->name));
 
   pid = np->pid;
+
+  /* Assignment 3 */
+  #ifdef SCFIFO
+  np->clock_hand = curproc->clock_hand;
+  #endif // SCFIFO
+  np->current_psyc_pages = curproc->current_psyc_pages;
+  np->total_alloc_pages = curproc->total_alloc_pages;
+  np->current_paged_out_count = curproc->current_paged_out_count;
+  np->pf_count = curproc->pf_count;
+  np->total_page_out_count = curproc->total_page_out_count;
+  // Create swap file if np is not init or sh, and copy the parent's swap file content into it
+  // and copy metadata
+  createSwapFile(np);
+  if (curproc->pid > 2) {
+    for (offset = 0; offset < MAX_SWAP_PAGES; offset += sizeof(buf)) {
+      readFromSwapFile(curproc, buf, offset, sizeof(buf));
+      writeToSwapFile(np, buf, offset, sizeof(buf));
+    }
+    cprintf("%d finished swap file copy\n", pid);
+  }
+  memmove(np->swapFileTable, curproc->swapFileTable, sizeof(curproc->swapFileTable));
+  memmove(np->allocd_vas, curproc->allocd_vas, sizeof(curproc->allocd_vas));
 
   acquire(&ptable.lock);
 
@@ -246,6 +282,9 @@ exit(void)
   iput(curproc->cwd);
   end_op();
   curproc->cwd = 0;
+
+  /* Assignment 3 */
+  removeSwapFile(curproc);
 
   acquire(&ptable.lock);
 
