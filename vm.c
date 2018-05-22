@@ -224,7 +224,7 @@ allocuvm(pde_t *pgdir, uint oldsz, uint newsz)
   struct proc *p = myproc();
   char *mem;
   uint a;
-  uint *allocd_va;
+  struct allocd_va_data* allocd_va;
 
   if(newsz >= KERNBASE)
     return 0;
@@ -252,8 +252,8 @@ allocuvm(pde_t *pgdir, uint oldsz, uint newsz)
     }
     /* Assignment 3 */
     for (allocd_va = p->allocd_vas; allocd_va < &p->allocd_vas[MAX_PSYC_PAGES]; allocd_va++) {
-      if (*allocd_va == -1) {
-        *allocd_va = a;
+      if (allocd_va->va == -1) {
+        allocd_va->va = a;
         break;
       }
     }
@@ -273,7 +273,7 @@ deallocuvm(pde_t *pgdir, uint oldsz, uint newsz)
   struct proc *p = myproc();
   pte_t *pte;
   uint a, pa;
-  uint *allocd_va;
+  struct allocd_va_data* allocd_va;
 
   if(newsz >= oldsz)
     return oldsz;
@@ -291,8 +291,8 @@ deallocuvm(pde_t *pgdir, uint oldsz, uint newsz)
       kfree(v);
       *pte = 0;
       for (allocd_va = p->allocd_vas; allocd_va < &p->allocd_vas[MAX_PSYC_PAGES]; allocd_va++) {
-        if (*allocd_va == a) {
-          *allocd_va = -1;
+        if (allocd_va->va == a) {
+          allocd_va->va = -1;
           break;
         }
       }
@@ -423,10 +423,10 @@ copyout(pde_t *pgdir, uint va, void *p, uint len)
 // Blank page.
 
 /* Assignment 3 */
-uint* select_page(void) {
+uint select_page(void) {
   struct proc *p = myproc();
   pte_t *pte;
-  uint *allocd_va = 0;
+  struct allocd_va_data* allocd_va = 0;
 
   #ifdef NFUA
 
@@ -437,15 +437,15 @@ uint* select_page(void) {
 
   #endif // LAPA
   #ifdef SCFIFO
-  while (p->allocd_vas[p->clock_hand] == -1) {
+  while (p->allocd_vas[p->clock_hand].va == -1) {
     cprintf("problem?\n");
     p->clock_hand = (p->clock_hand + 1) % MAX_PSYC_PAGES;
   }
-  pte = walkpgdir(p->pgdir, (void*)p->allocd_vas[p->clock_hand], 0);
+  pte = walkpgdir(p->pgdir, (void*)p->allocd_vas[p->clock_hand].va, 0);
   while (*pte & PTE_A) {
     *pte &= ~PTE_A;
     p->clock_hand = (p->clock_hand + 1) % MAX_PSYC_PAGES;
-    pte = walkpgdir(p->pgdir, (void*)p->allocd_vas[p->clock_hand], 0);
+    pte = walkpgdir(p->pgdir, (void*)p->allocd_vas[p->clock_hand].va, 0);
   }
   allocd_va = &p->allocd_vas[p->clock_hand];
   p->clock_hand = (p->clock_hand + 1) % MAX_PSYC_PAGES;
@@ -455,7 +455,7 @@ uint* select_page(void) {
 
   #endif // AQ
 
-  return allocd_va;
+  return allocd_va->va;
 }
 
 int page_in(uint va) {
@@ -485,8 +485,7 @@ int page_in(uint va) {
 
 int page_out(void) {
   struct proc *p = myproc();
-  uint *allocd_va = select_page();
-  uint va = *allocd_va;
+  uint va = select_page();
   pte_t *pte = walkpgdir(p->pgdir, (void*)va, 0);
   char *mem = (char*)(P2V(PTE_ADDR(*pte)));
 
@@ -534,4 +533,17 @@ int handle_pgflt(uint va) {
     }
   }
   return -1;
+}
+
+void updates_refs(void){
+  struct proc* p = myproc();
+  pte_t* pte;
+  struct allocd_va_data* avd;
+  for (avd = p->allocd_vas; avd<&p->allocd_vas[MAX_PSYC_PAGES]; avd++){
+    pte = walkpgdir(p->pgdir, (void*)avd->va, 0);
+    avd->ref_count /= 2;
+    if (*pte & PTE_A){
+      avd->ref_count |= (1 << 31);
+    }
+  }
 }
