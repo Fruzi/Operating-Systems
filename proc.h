@@ -70,10 +70,13 @@ struct proc {
 
   /* Assignment 3 */
   struct swapFileEntry swapFileTable[MAX_SWAP_PAGES];
+  struct allocd_va_data allocd_vas[MAX_PSYC_PAGES];  // Virtual addresses of pages currently in physical memory
   #ifdef SCFIFO
   uint clock_hand;                  // Index into allocd_vas
   #endif // SCFIFO
-  struct allocd_va_data allocd_vas[MAX_PSYC_PAGES];  // Virtual addresses of pages currently in physical memory
+  #ifdef AQ
+  uint queue[MAX_PSYC_PAGES];
+  #endif // AQ
   uint current_psyc_pages;          // Number of pages currently in physical memory
   uint total_alloc_pages;           // Total number of allocated pages
   uint current_paged_out_count;     // Number of pages that are currently paged out

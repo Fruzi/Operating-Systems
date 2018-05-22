@@ -50,6 +50,14 @@ trap(struct trapframe *tf)
   case T_IRQ0 + IRQ_TIMER:
     if(cpuid() == 0){
       acquire(&tickslock);
+
+      #if defined(NFUA) || defined(LAPA)
+      update_refs();
+      #endif // NFUA || LAPA
+      #ifdef AQ
+      update_queue();
+      #endif // AQ
+      
       ticks++;
       wakeup(&ticks);
       release(&tickslock);
@@ -79,10 +87,12 @@ trap(struct trapframe *tf)
     break;
 
   /* Assignment 3 */
+  #ifndef NONE
   case T_PGFLT:
     if (myproc() && handle_pgflt(rcr2()) == 0) {
       break;
     }
+  #endif // NONE
 
   //PAGEBREAK: 13
   default:
@@ -110,12 +120,6 @@ trap(struct trapframe *tf)
   // If interrupts were on while locks held, would need to check nlock.
   if(myproc() && myproc()->state == RUNNING &&
      tf->trapno == T_IRQ0+IRQ_TIMER)
-    #ifdef NFUA
-    update_refs();
-    #endif // NFUA
-    #ifdef LAPA
-    update_refs();
-    #endif // LAPA
     yield();
 
   // Check if the process has been killed since we yielded

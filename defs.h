@@ -194,9 +194,17 @@ void            switchkvm(void);
 int             copyout(pde_t*, uint, void*, uint);
 void            clearpteu(pde_t *pgdir, char *uva);
 /* Assignmen 3 */
+#ifndef NONE
 int             page_in(uint);
 int             page_out(void);
 int             handle_pgflt(uint);
+#if defined(NFUA) || defined(LAPA)
+void            update_refs(void);
+#endif // NFUA || LAPA
+#ifdef AQ
+void            update_queue(void);
+#endif // AQ
+#endif // NONE
 
 // number of elements in fixed-size array
 #define NELEM(x) (sizeof(x)/sizeof((x)[0]))

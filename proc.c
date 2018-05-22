@@ -119,11 +119,15 @@ found:
   #ifdef SCFIFO
   p->clock_hand = 0;
   #endif // SCFIFO
+  #ifdef AQ
+  memset(p->queue, -1, sizeof(p->queue));
+  #endif // AQ
   p->current_psyc_pages = 0;
   p->total_alloc_pages = 0;
   p->current_paged_out_count = 0;
   p->pf_count = 0;
   p->total_page_out_count = 0;
+
   return p;
 }
 
@@ -195,8 +199,10 @@ fork(void)
   int i, pid;
   struct proc *np;
   struct proc *curproc = myproc();
+  #ifndef NONE
   char buf[1024] = {0};
   uint offset;
+  #endif // NONE
 
   // Allocate process.
   if((np = allocproc()) == 0){
@@ -227,15 +233,22 @@ fork(void)
   pid = np->pid;
 
   /* Assignment 3 */
+  memmove(np->swapFileTable, curproc->swapFileTable, sizeof(curproc->swapFileTable));
+  memmove(np->allocd_vas, curproc->allocd_vas, sizeof(curproc->allocd_vas));
   #ifdef SCFIFO
   np->clock_hand = curproc->clock_hand;
   #endif // SCFIFO
+  #ifdef AQ
+  memmove(np->queue, curproc->queue, sizeof(curproc->queue));
+  #endif // AQ
   np->current_psyc_pages = curproc->current_psyc_pages;
   np->total_alloc_pages = curproc->total_alloc_pages;
   np->current_paged_out_count = curproc->current_paged_out_count;
-  np->pf_count = curproc->pf_count;
-  np->total_page_out_count = curproc->total_page_out_count;
-  // Create swap file if np is not init or sh, and copy the parent's swap file content into it
+  np->pf_count = 0;
+  np->total_page_out_count = 0;
+
+  #ifndef NONE
+  // Create swap file, and copy the parent's swap file content into it if curproc is not init or sh
   // and copy metadata
   createSwapFile(np);
   if (curproc->pid > 2) {
@@ -245,8 +258,7 @@ fork(void)
     }
     cprintf("%d finished swap file copy\n", pid);
   }
-  memmove(np->swapFileTable, curproc->swapFileTable, sizeof(curproc->swapFileTable));
-  memmove(np->allocd_vas, curproc->allocd_vas, sizeof(curproc->allocd_vas));
+  #endif // NONE
 
   acquire(&ptable.lock);
 
@@ -284,7 +296,9 @@ exit(void)
   curproc->cwd = 0;
 
   /* Assignment 3 */
+  #ifndef NONE
   removeSwapFile(curproc);
+  #endif // NONE
 
   acquire(&ptable.lock);
 
