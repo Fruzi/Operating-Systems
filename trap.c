@@ -113,6 +113,9 @@ trap(struct trapframe *tf)
     #ifdef NFUA
     update_refs();
     #endif // NFUA
+    #ifdef LAPA
+    update_refs();
+    #endif // LAPA
     yield();
 
   // Check if the process has been killed since we yielded

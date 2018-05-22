@@ -254,6 +254,12 @@ allocuvm(pde_t *pgdir, uint oldsz, uint newsz)
     for (allocd_va = p->allocd_vas; allocd_va < &p->allocd_vas[MAX_PSYC_PAGES]; allocd_va++) {
       if (allocd_va->va == -1) {
         allocd_va->va = a;
+        #ifdef NFUA
+        allocd_va->ref_count = 0;
+        #endif // NFUA
+        #ifdef LAPA
+        allocd_va->ref_count = 0xffffffff;
+        #endif // LAPA
         break;
       }
     }
@@ -423,18 +429,46 @@ copyout(pde_t *pgdir, uint va, void *p, uint len)
 // Blank page.
 
 /* Assignment 3 */
+uint count_ones(uint x){
+  uint i=0;
+  while(x>0){
+    if(x%2){
+      i++;
+    }
+    x/=2;
+  }
+  return i;
+}
+
 uint select_page(void) {
   struct proc *p = myproc();
   pte_t *pte;
   struct allocd_va_data* allocd_va = 0;
 
   #ifdef NFUA
-
-
+  int min = p->allocd_vas[0].ref_count;
+  allocd_va_data* avd;
+  for (avd = p->allocd_vas; avd<&p->allocd_vas[MAX_PSYC_PAGES]; avd++){
+    if (avd->ref_count<=min){
+      min = avd->ref_count;
+      allocd_va = avd;
+    }
+  }
   #endif // NFUA
   #ifdef LAPA
-
-
+  int min = p->allocd_vas[0].ref_count;
+  allocd_va_data* avd;
+  for (avd = p->allocd_vas; avd<&p->allocd_vas[MAX_PSYC_PAGES]; avd++){
+    if (count_ones(avd->ref_count)<count_ones(min)){
+      min = avd->ref_count;
+      allocd_va = avd;
+    }else if(count_ones(avd->ref_count) == count_ones(min)){
+        if(avd->ref_count<= min){
+          min = avd->ref_count;
+          allocd_va = avd; 
+        }
+    }
+  }
   #endif // LAPA
   #ifdef SCFIFO
   while (p->allocd_vas[p->clock_hand].va == -1) {
@@ -535,6 +569,7 @@ int handle_pgflt(uint va) {
   return -1;
 }
 
+#ifdef NFUA
 void updates_refs(void){
   struct proc* p = myproc();
   pte_t* pte;
@@ -547,3 +582,6 @@ void updates_refs(void){
     }
   }
 }
+#endif // NFUA
+
+
