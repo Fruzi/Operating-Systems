@@ -196,6 +196,7 @@ growproc(int n)
 int
 fork(void)
 {
+  //cprintf("ENTER fork     pid %d\n", myproc()->pid);
   int i, pid;
   struct proc *np;
   struct proc *curproc = myproc();
@@ -256,7 +257,7 @@ fork(void)
       readFromSwapFile(curproc, buf, offset, sizeof(buf));
       writeToSwapFile(np, buf, offset, sizeof(buf));
     }
-    cprintf("%d finished swap file copy\n", pid);
+    //cprintf("%d finished swap file copy\n", pid);
   }
   #endif // NONE
 
@@ -265,7 +266,7 @@ fork(void)
   np->state = RUNNABLE;
 
   release(&ptable.lock);
-
+  //cprintf("EXIT fork     pid %d\n", myproc()->pid);
   return pid;
 }
 
@@ -296,9 +297,13 @@ exit(void)
   curproc->cwd = 0;
 
   /* Assignment 3 */
+  if(VERBOSE_PRINT){
+    procdump();
+  }
   #ifndef NONE
   removeSwapFile(curproc);
   #endif // NONE
+  
 
   acquire(&ptable.lock);
 
@@ -342,6 +347,7 @@ wait(void)
         pid = p->pid;
         kfree(p->kstack);
         p->kstack = 0;
+        //cprintf("IN wait setupkvm\n");
         freevm(p->pgdir);
         p->pid = 0;
         p->parent = 0;
@@ -576,7 +582,7 @@ procdump(void)
       state = states[p->state];
     else
       state = "???";
-    cprintf("%d %s %s", p->pid, state, p->name);
+    cprintf("%d %s %d %d %d %d %d %s", p->pid, state, p->total_alloc_pages, p->current_psyc_pages, p->current_paged_out_count, p->pf_count, p->total_page_out_count, p->name);
     if(p->state == SLEEPING){
       getcallerpcs((uint*)p->context->ebp+2, pc);
       for(i=0; i<10 && pc[i] != 0; i++)
@@ -584,4 +590,7 @@ procdump(void)
     }
     cprintf("\n");
   }
+  //TODO
+
+  //cprintf("%d free pages in the system, TODO\n", 10);
 }

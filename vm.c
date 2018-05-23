@@ -118,6 +118,7 @@ static struct kmap {
 pde_t*
 setupkvm(void)
 {
+  //cprintf("ENTER setupkvm\n");
   pde_t *pgdir;
   struct kmap *k;
 
@@ -130,8 +131,10 @@ setupkvm(void)
     if(mappages(pgdir, k->virt, k->phys_end - k->phys_start,
                 (uint)k->phys_start, k->perm) < 0) {
       freevm(pgdir);
+      //cprintf("EXIT setupkvm\n");
       return 0;
     }
+  //cprintf("EXIT setupkvm\n");
   return pgdir;
 }
 
@@ -222,6 +225,7 @@ int
 allocuvm(pde_t *pgdir, uint oldsz, uint newsz)
 {
   struct proc *p = myproc();
+  //cprintf("ENTER allocuvm   pid %d pde:%p oldsz: %d new sz: %d\n", p->pid, pgdir, oldsz, newsz);
   char *mem;
   uint a;
   #ifndef NONE
@@ -238,6 +242,7 @@ allocuvm(pde_t *pgdir, uint oldsz, uint newsz)
 
   a = PGROUNDUP(oldsz);
   for(; a < newsz; a += PGSIZE){
+    //cprintf("INC pre a %d current %d total %d\n",p->pid, p->current_psyc_pages, p->total_alloc_pages);
     /* Assignment 3 */
     #ifndef NONE
     if (p->current_psyc_pages == MAX_PSYC_PAGES) {
@@ -261,6 +266,7 @@ allocuvm(pde_t *pgdir, uint oldsz, uint newsz)
     /* Assignment 3 */
     #ifndef NONE
     for (allocd_va = p->allocd_vas; allocd_va < &p->allocd_vas[MAX_PSYC_PAGES]; allocd_va++) {
+      
       if (allocd_va->va == -1) {
         allocd_va->va = a;
         #ifdef NFUA
@@ -278,10 +284,16 @@ allocuvm(pde_t *pgdir, uint oldsz, uint newsz)
         break;
       }
     }
-    #endif // NONE
-    p->current_psyc_pages++;
-    p->total_alloc_pages++;
+    #endif // NONE 
+    if (pgdir == p->pgdir){
+      p->current_psyc_pages++;
+      p->total_alloc_pages++;  
+    } 
+    if(p->pid >2){
+      //cprintf("INC post  %d current %d total %d\n",p->pid, p->current_psyc_pages, p->total_alloc_pages);  
+    }  
   }
+  //cprintf("EXIT  allocuvm   pid %d pde:%p oldsz: %d new sz: %d\n", p->pid, pgdir, oldsz, newsz);
   return newsz;
 }
 
@@ -293,6 +305,7 @@ int
 deallocuvm(pde_t *pgdir, uint oldsz, uint newsz)
 {
   struct proc *p = myproc();
+  //cprintf("ENTER  deallocuvm   pid %d pde:%p oldsz: %x new sz: %d\n", p->pid, pgdir, oldsz, newsz);
   pte_t *pte;
   uint a, pa;
 
@@ -333,9 +346,16 @@ deallocuvm(pde_t *pgdir, uint oldsz, uint newsz)
       }
       #endif // AQ
       #endif // NONE
-      p->current_psyc_pages--;
+      if (pgdir == p->pgdir){
+        p->current_psyc_pages--;  
+      }
+      if(p->pid >2){
+      //cprintf("DEC %d current %d\n",p->pid, p->current_psyc_pages);  
+    }
     }
   }
+
+  //cprintf("LEAVE  deallocuvm   pid %d pde:%p oldsz: %d new sz: %d\n", p->pid, pgdir, oldsz, newsz);
   return newsz;
 }
 
@@ -344,6 +364,7 @@ deallocuvm(pde_t *pgdir, uint oldsz, uint newsz)
 void
 freevm(pde_t *pgdir)
 {
+  //cprintf("ENTER freevm\n");
   uint i;
 
   if(pgdir == 0)
@@ -355,6 +376,7 @@ freevm(pde_t *pgdir)
       kfree(v);
     }
   }
+  //cprintf("EXIT freevm\n");
   kfree((char*)pgdir);
 }
 
@@ -376,6 +398,7 @@ clearpteu(pde_t *pgdir, char *uva)
 pde_t*
 copyuvm(pde_t *pgdir, uint sz)
 {
+  //cprintf("ENTER copy_uvm\n");
   pde_t *d;
   pte_t *pte;
   uint pa, i, flags;
@@ -408,10 +431,12 @@ copyuvm(pde_t *pgdir, uint sz)
         goto bad;
     }
   }
+  //cprintf("EXIT copy_uvm\n");
   return d;
 
 bad:
   freevm(d);
+  //cprintf("EXIT copy_uvm\n");
   return 0;
 }
 
@@ -477,7 +502,9 @@ uint count_ones(uint x){
 }
 
 uint select_page(void) {
-  struct proc *p = myproc();
+  #ifndef NONE
+  struct proc* p = myproc();
+  #endif
   uint va = -1;
   #ifdef SCFIFO
   pte_t *pte;
@@ -578,6 +605,7 @@ int page_in(uint va) {
 }
 
 int page_out(void) {
+  //cprintf("ENTER page_out\n");
   struct proc *p = myproc();
   uint va = select_page();
   pte_t *pte = walkpgdir(p->pgdir, (void*)va, 0);
@@ -600,10 +628,12 @@ int page_out(void) {
       lcr3(V2P(p->pgdir));  // switch to process's address space
       p->current_paged_out_count++;
       p->total_page_out_count++;
+      cprintf("EXIT page_out\n");
       return 0;
     }
     prev_sfe = sfe;
   }
+  //cprintf("EXIT page_out\n");
   return -1;
 }
 
