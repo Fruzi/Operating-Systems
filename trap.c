@@ -52,10 +52,14 @@ trap(struct trapframe *tf)
       acquire(&tickslock);
 
       #if defined(NFUA) || defined(LAPA)
-      update_refs();
+      if(myproc() && myproc()->pid>2){
+        update_refs();
+      }
       #endif // NFUA || LAPA
       #ifdef AQ
-      update_queue();
+      if(myproc() && myproc()->pid>2){
+        update_queue();
+      }
       #endif // AQ
       
       ticks++;
