@@ -578,15 +578,16 @@ uint select_page(void) {
 
 int page_in(uint va) {
   struct proc *p = myproc();
+  cprintf("ENTER page_in: pid %d va %d\n", p->pid, va);
   pte_t *pte;
   char *mem;
   struct swapFileEntry *sfe;
 
   va = PGROUNDDOWN(va);
-  cprintf("in page_in: pid %d va %d\n", p->pid, va);
+  
 
   for (sfe = p->swapFileTable; sfe < &p->swapFileTable[MAX_SWAP_PAGES]; sfe++) {
-    cprintf("sfe->va %d\n", sfe->va);
+    //cprintf("sfe->va %d\n", sfe->va);
     if (sfe->va == va) {
       allocuvm(p->pgdir, va, va + PGSIZE);
       pte = walkpgdir(p->pgdir, (void*)va, 0);
@@ -598,15 +599,17 @@ int page_in(uint va) {
       *pte = (V2P(mem) | PTE_FLAGS(*pte)) & ~PTE_PG;
       sfe->va = -1;
       p->current_paged_out_count--;
+      cprintf("EXIT a page_in: pid %d va %d\n", p->pid, va);
       return 0;
     }
   }
+  cprintf("EXIT b page_in: pid %d va %d\n", p->pid, va);
   return -1;
 }
 
 int page_out(void) {
-  //cprintf("ENTER page_out\n");
   struct proc *p = myproc();
+  cprintf("ENTER a page_out: pid %d\n", p->pid);
   uint va = select_page();
   pte_t *pte = walkpgdir(p->pgdir, (void*)va, 0);
   char *mem = (char*)(P2V(PTE_ADDR(*pte)));
@@ -614,7 +617,6 @@ int page_out(void) {
   if (!pte) {
     panic("page_out: pte should exist");
   }
-  cprintf("in page_out: pid %d va %d\n", p->pid, va);
 
   struct swapFileEntry *sfe;
   struct swapFileEntry *prev_sfe = 0;
@@ -628,12 +630,12 @@ int page_out(void) {
       lcr3(V2P(p->pgdir));  // switch to process's address space
       p->current_paged_out_count++;
       p->total_page_out_count++;
-      cprintf("EXIT page_out\n");
+      cprintf("EXIT a page_out: pid %d\n", p->pid);
       return 0;
     }
     prev_sfe = sfe;
   }
-  //cprintf("EXIT page_out\n");
+  cprintf("EXIT b page_out: pid %d\n", p->pid);
   return -1;
 }
 
@@ -641,14 +643,14 @@ int handle_pgflt(uint va) {
   struct proc* p = myproc();
   pte_t* pte;
 
-  cprintf("in handle_pgflt: pid %d va %d\n", p->pid, va);
+  cprintf("ENTER handle_pgflt: pid %d va %d\n", p->pid, va);
 
   if ((pte = walkpgdir(p->pgdir, (void*)va, 0))) {
-    cprintf("pte %x present %d PG %d\n", pte, *pte & PTE_P, *pte & PTE_PG);
+    //cprintf("pte %x present %d PG %d\n", pte, *pte & PTE_P, *pte & PTE_PG);
     if (*pte & PTE_PG) {
       // Page out if the process has MAX_PSYC_PAGES pages in main memory.
       // Page in the page the contains va.
-      cprintf("handling page fault: pid %d va %d\n", p->pid, va);
+      //cprintf("handling page fault: pid %d va %d\n", p->pid, va);
       while (p->current_psyc_pages >= MAX_PSYC_PAGES) {
         if (page_out() == -1)
           panic("handle_pgflt, page_out");
@@ -656,9 +658,11 @@ int handle_pgflt(uint va) {
       if (page_in(va) == -1)
         panic("handle_pgflt, page_in");
       p->pf_count++;
+      cprintf("EXIT a handle_pgflt: pid %d va %d\n", p->pid, va);
       return 0;
     }
   }
+  cprintf("EXIT b handle_pgflt: pid %d va %d\n", p->pid, va);
   return -1;
 }
 
