@@ -20,6 +20,8 @@ extern void trapret(void);
 
 static void wakeup1(void *chan);
 
+extern char end[];
+
 void
 pinit(void)
 {
@@ -196,7 +198,6 @@ growproc(int n)
 int
 fork(void)
 {
-  //cprintf("ENTER fork     pid %d\n", myproc()->pid);
   int i, pid;
   struct proc *np;
   struct proc *curproc = myproc();
@@ -257,7 +258,6 @@ fork(void)
       readFromSwapFile(curproc, buf, offset, sizeof(buf));
       writeToSwapFile(np, buf, offset, sizeof(buf));
     }
-    //cprintf("%d finished swap file copy\n", pid);
   }
   #endif // NONE
 
@@ -266,7 +266,6 @@ fork(void)
   np->state = RUNNABLE;
 
   release(&ptable.lock);
-  //cprintf("EXIT fork     pid %d\n", myproc()->pid);
   return pid;
 }
 
@@ -300,10 +299,10 @@ exit(void)
   if(VERBOSE_PRINT){
     procdump();
   }
+
   #ifndef NONE
   removeSwapFile(curproc);
   #endif // NONE
-  
 
   acquire(&ptable.lock);
 
@@ -347,7 +346,6 @@ wait(void)
         pid = p->pid;
         kfree(p->kstack);
         p->kstack = 0;
-        //cprintf("IN wait setupkvm\n");
         freevm(p->pgdir);
         p->pid = 0;
         p->parent = 0;
@@ -574,6 +572,8 @@ procdump(void)
   struct proc *p;
   char *state;
   uint pc[10];
+  uint current_psyc_pages_total = 0;
+  uint num_free_pages =  (uint)(((char*)P2V(PHYSTOP) - end) / PGSIZE);
 
   for(p = ptable.proc; p < &ptable.proc[NPROC]; p++){
     if(p->state == UNUSED)
@@ -582,7 +582,7 @@ procdump(void)
       state = states[p->state];
     else
       state = "???";
-    cprintf("%d %s %d %d %d %d %d %s", p->pid, state, p->total_alloc_pages, p->current_psyc_pages, p->current_paged_out_count, p->pf_count, p->total_page_out_count, p->name);
+    cprintf("%d %s %d %d %d %d %s", p->pid, state, p->current_psyc_pages, p->current_paged_out_count, p->pf_count, p->total_page_out_count, p->name);
     if(p->state == SLEEPING){
       getcallerpcs((uint*)p->context->ebp+2, pc);
       for(i=0; i<10 && pc[i] != 0; i++)
@@ -590,7 +590,11 @@ procdump(void)
     }
     cprintf("\n");
   }
-  //TODO
-
-  //cprintf("%d free pages in the system, TODO\n", 10);
+  for(p = ptable.proc; p < &ptable.proc[NPROC]; p++) {
+    if(p->state == UNUSED || p->pid <= 2)
+      continue;
+    current_psyc_pages_total += p->current_psyc_pages;
+  }
+  cprintf("%d / %d free pages in the system\n",
+    num_free_pages - current_psyc_pages_total, num_free_pages);
 }

@@ -61,7 +61,11 @@ trap(struct trapframe *tf)
         update_queue();
       }
       #endif // AQ
-      
+      #ifndef NONE
+      if(myproc() && myproc()->pid>2){
+        reset_accessed_bits();
+      }
+      #endif // NONE
       ticks++;
       wakeup(&ticks);
       release(&tickslock);

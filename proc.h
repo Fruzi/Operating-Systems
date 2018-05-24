@@ -47,7 +47,7 @@ struct swapFileEntry {
 struct allocd_va_data {
   uint va;
   uint ref_count;
-}; 
+};
 
 // Per-process state
 struct proc {

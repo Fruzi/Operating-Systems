@@ -204,6 +204,7 @@ void            update_refs(void);
 #ifdef AQ
 void            update_queue(void);
 #endif // AQ
+void            reset_accessed_bits(void);
 #endif // NONE
 
 // number of elements in fixed-size array

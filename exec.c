@@ -10,7 +10,6 @@
 int
 exec(char *path, char **argv)
 {
-  //cprintf("ETNER exec\n");
   char *s, *last;
   int i, off;
   uint argc, sz, sp, ustack[3+MAXARG+1];
@@ -54,7 +53,7 @@ exec(char *path, char **argv)
   curproc->current_paged_out_count = 0;
   curproc->pf_count = 0;
   curproc->total_page_out_count = 0;
-  
+
   #ifndef NONE
   removeSwapFile(curproc);
   createSwapFile(curproc);
@@ -122,13 +121,11 @@ exec(char *path, char **argv)
   curproc->tf->eip = elf.entry;  // main
   curproc->tf->esp = sp;
   switchuvm(curproc);
-  //cprintf("IN exec a\n");
   freevm(oldpgdir);
   return 0;
 
  bad:
   if(pgdir)
-    //cprintf("IN exec b\n");
     freevm(pgdir);
   if(ip){
     iunlockput(ip);
