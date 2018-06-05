@@ -443,3 +443,57 @@ sys_pipe(void)
   fd[1] = fd1;
   return 0;
 }
+
+/* Assignment 4 */
+int sys_symlink(void) {
+  char *oldpath, *newpath;
+  int fd;
+  struct file *f;
+  struct inode *ip;
+
+  if (argstr(0, &oldpath) < 0 || argstr(1, &newpath) < 0)
+    return -1;
+
+  begin_op();
+
+  if (namei(newpath)) {
+    end_op();
+    return -1;
+  }
+  if ((ip = create(newpath, T_SYM, 0, 0)) == 0) {
+    end_op();
+    return -1;
+  }
+
+  if ((f = filealloc()) == 0 || (fd = fdalloc(f)) < 0) {
+    if (f)
+      fileclose(f);
+    iunlockput(ip);
+    end_op();
+    return -1;
+  }
+  iunlock(ip);
+  end_op();
+
+  f->type = FD_INODE;
+  f->ip = ip;
+  f->off = 0;
+  f->readable = 0;
+  f->writable = 1;
+
+  // Write oldpath into then new file f, then close the file.
+  filewrite(f, oldpath, strlen(oldpath) + 1);
+  myproc()->ofile[fd] = 0;
+  fileclose(f);
+
+  return fd;
+}
+
+int sys_readlink(void) {
+  char *pathname, *buf;
+  uint bufsize;
+  if (argstr(0, &pathname) < 0 || argstr(1, &buf) < 0 || argint(2, (int*)&bufsize) < 0)
+    return -1;
+
+  return readlink(pathname, buf, bufsize);
+}

@@ -29,3 +29,6 @@ SYSCALL(getpid)
 SYSCALL(sbrk)
 SYSCALL(sleep)
 SYSCALL(uptime)
+/* Assignment 4 */
+SYSCALL(symlink)
+SYSCALL(readlink)

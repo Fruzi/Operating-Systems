@@ -23,6 +23,8 @@
 
 #define min(a, b) ((a) < (b) ? (a) : (b))
 static void itrunc(struct inode*);
+static int readlink1(struct inode*, char*, uint);
+static struct inode* namei1(char*, char*);
 // there should be one superblock per disk device, but we run with
 // only one device
 struct superblock sb; 
@@ -651,6 +653,7 @@ skipelem(char *path, char *name)
 static struct inode*
 namex(char *path, int nameiparent, char *name)
 {
+  static int deref_count = 0;
   struct inode *ip, *next;
 
   if(*path == '/')
@@ -660,7 +663,8 @@ namex(char *path, int nameiparent, char *name)
 
   while((path = skipelem(path, name)) != 0){
     ilock(ip);
-    if(ip->type != T_DIR){
+    /* Assignment 4 */
+    if (ip->type != T_DIR) {
       iunlockput(ip);
       return 0;
     }
@@ -673,7 +677,30 @@ namex(char *path, int nameiparent, char *name)
       iunlockput(ip);
       return 0;
     }
-    iunlockput(ip);
+    iunlock(ip);
+    ilock(next);
+    if (next->type == T_SYM) {
+      if (deref_count++ >= MAX_DEREFERENCE) {
+        cprintf("Too many symbolic link dereferences\n");
+        iunlockput(next);
+        iput(ip);
+        return 0;
+      }
+      //readi(next, name, 0, DIRSIZ);
+      //iunlockput(next);
+      iunlock(next);
+      if (readlink1(next, name, DIRSIZ) != 0) {
+        iput(next);
+        iput(ip);
+        return 0;
+      }
+      iput(next);
+      next = namei(name);
+    } else {
+      deref_count = 0;
+      iunlock(next);
+    }
+    iput(ip);
     ip = next;
   }
   if(nameiparent){
@@ -681,6 +708,10 @@ namex(char *path, int nameiparent, char *name)
     return 0;
   }
   return ip;
+}
+
+static struct inode* namei1(char *path, char *name) {
+  return namex(path, 0, name);
 }
 
 struct inode*
@@ -694,4 +725,58 @@ struct inode*
 nameiparent(char *path, char *name)
 {
   return namex(path, 1, name);
+}
+
+/* Assignment 4 */
+static int readlink1(struct inode *ip, char *buf, uint bufsize) {
+  char temp_buf[512];
+  struct inode *next_ip;
+  int deref_count;
+
+  begin_op();
+  ilock(ip);
+  if (ip->type != T_SYM) {
+    cprintf("not symbolic\n");
+    iunlockput(ip);
+    end_op();
+    return -1;
+  }
+
+  for (deref_count = 0; deref_count < MAX_DEREFERENCE; deref_count++) {
+    readi(ip, temp_buf, 0, 512);
+    if ((next_ip = namei(temp_buf)) == 0) {
+      cprintf("broken link\n");
+      iunlockput(ip);
+      end_op();
+      return -1;
+    }
+    if (next_ip->type != T_SYM) {
+      // Found the last link.
+      if (strlen(temp_buf) > bufsize) {
+        cprintf("buffer too big\n");
+        iunlockput(ip);
+        end_op();
+        return -1;
+      }
+      safestrcpy(buf, temp_buf, bufsize);
+      iunlockput(ip);
+      end_op();
+      return 0;
+    }
+    // Follow the next link.
+    iunlockput(ip);
+    ip = next_ip;
+    ilock(ip);
+  }
+  cprintf("reached maximum dereferences\n");
+  iunlockput(ip);
+  end_op();
+  return -1;
+}
+
+int readlink(const char *pathname, char *buf, uint bufsize) {
+  if (namei1((char*)pathname, buf) == 0) {
+    return -1;
+  }
+  return 0;
 }

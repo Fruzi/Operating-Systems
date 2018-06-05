@@ -12,4 +12,5 @@
 #define NBUF         (MAXOPBLOCKS*3)  // size of disk block cache
 /* Assignment 4 */
 #define FSSIZE       (1 << 15)  // size of file system in blocks
+#define MAX_DEREFERENCE 31  // max symbolic link dereference count
 
