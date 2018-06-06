@@ -686,10 +686,8 @@ namex(char *path, int nameiparent, char *name)
         iput(ip);
         return 0;
       }
-      //readi(next, name, 0, DIRSIZ);
-      //iunlockput(next);
       iunlock(next);
-      if (readlink1(next, name, DIRSIZ) != 0) {
+      if (readlink1(next, name, DIRSIZ) < 0) {
         iput(next);
         iput(ip);
         return 0;
@@ -779,4 +777,30 @@ int readlink(const char *pathname, char *buf, uint bufsize) {
     return -1;
   }
   return 0;
+}
+
+// Like bmap but for the tag block
+static uint tagbmap(struct inode *ip) {
+  uint addr;
+  if((addr = ip->addrs[NDIRECT+2]) == 0)
+    ip->addrs[NDIRECT+2] = addr = balloc(ip->dev);
+  return addr;
+}
+
+int readtagi(struct inode *ip, char *dst) {
+  struct buf *bp;
+
+  bp = bread(ip->dev, tagbmap(ip));
+  memmove(dst, bp->data, BSIZE);
+  brelse(bp);
+  return BSIZE;
+}
+
+int writetagi(struct inode *ip, char *src) {
+  struct buf *bp;
+  bp = bread(ip->dev, tagbmap(ip));
+  memmove(bp->data, src, BSIZE);
+  log_write(bp);
+  brelse(bp);
+  return BSIZE;
 }

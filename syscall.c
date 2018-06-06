@@ -106,6 +106,9 @@ extern int sys_uptime(void);
 /* Assignment 4 */
 extern int sys_symlink(void);
 extern int sys_readlink(void);
+extern int sys_ftag(void);
+extern int sys_funtag(void);
+extern int sys_gettag(void);
 
 static int (*syscalls[])(void) = {
 [SYS_fork]    sys_fork,
@@ -131,7 +134,10 @@ static int (*syscalls[])(void) = {
 [SYS_close]   sys_close,
 /* Assignment 4 */
 [SYS_symlink]  sys_symlink,
-[SYS_readlink] sys_readlink
+[SYS_readlink] sys_readlink,
+[SYS_ftag] sys_ftag,
+[SYS_funtag] sys_funtag,
+[SYS_gettag] sys_gettag
 };
 
 void

@@ -8,15 +8,16 @@ void task1_sanity(void) {
   int fd;
   int i, n;
   int total = 0;
-  char buf[BSIZE];
-  memset(buf, 'a', BSIZE);
+  int chunk = BSIZE * 4;
+  char buf[chunk];
+  memset(buf, 'a', chunk);
 
   if ((fd = open("textfile", O_CREATE|O_RDWR)) < 0) {
     printf(1, "error: open\n");
     exit();
   }
-  for (i = 0; i < (1 << 20) / BSIZE; i++) {
-    if ((n = write(fd, buf, BSIZE)) != BSIZE) {
+  for (i = 0; i < (1 << 20) / chunk; i++) {
+    if ((n = write(fd, buf, chunk)) != chunk) {
       printf(1, "error: write\n");
       exit();
     }
@@ -74,11 +75,31 @@ void task2_sanity(void) {
   printf(1, "%s\n", buf2);
 }
 
+void task3_sanity(void) {
+  int fd;
+  char value[30];
+
+  if ((fd = open("f1", O_CREATE|O_RDWR)) < 0) {
+    return;
+  }
+  ftag(fd, "abc", "def");
+  ftag(fd, "ghi", "jkl");
+  ftag(fd, "abc", "sdfg");
+  ftag(fd, "blbla", "aaaaaaaaa");
+  gettag(fd, "ghi", value);
+  printf(1, "%s\n", value);
+  funtag(fd, "abc");
+  ftag(fd, "hello", "hi");
+  close(fd);
+}
+
 int main(int argc, char **argv) {
   if (argc < 2 || strcmp(argv[1], "1") == 0) {
    task1_sanity();
   } else if (strcmp(argv[1], "2") == 0) {
     task2_sanity();
+  } else if (strcmp(argv[1], "3") == 0) {
+    task3_sanity();
   }
   exit();
 }

@@ -32,3 +32,6 @@ SYSCALL(uptime)
 /* Assignment 4 */
 SYSCALL(symlink)
 SYSCALL(readlink)
+SYSCALL(ftag)
+SYSCALL(funtag)
+SYSCALL(gettag)

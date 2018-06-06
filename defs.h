@@ -33,6 +33,10 @@ void            fileinit(void);
 int             fileread(struct file*, char*, int n);
 int             filestat(struct file*, struct stat*);
 int             filewrite(struct file*, char*, int n);
+/* Assignment 4 */
+int             ftag(struct file*, const char*, const char*);
+int             funtag(struct file*, const char*);
+int             gettag(struct file*, const char*, char*);
 
 // fs.c
 void            readsb(int dev, struct superblock *sb);
@@ -54,6 +58,8 @@ void            stati(struct inode*, struct stat*);
 int             writei(struct inode*, char*, uint, uint);
 /* Assignment 4 */
 int             readlink(const char*, char*, uint);
+int             readtagi(struct inode*, char*);
+int             writetagi(struct inode*, char*);
 
 // ide.c
 void            ideinit(void);

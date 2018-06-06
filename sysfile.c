@@ -494,6 +494,32 @@ int sys_readlink(void) {
   uint bufsize;
   if (argstr(0, &pathname) < 0 || argstr(1, &buf) < 0 || argint(2, (int*)&bufsize) < 0)
     return -1;
-
   return readlink(pathname, buf, bufsize);
+}
+
+int sys_ftag(void) {
+  int fd;
+  struct file *f;
+  char *key, *value;
+  if (argfd(0, &fd, &f) < 0 || argstr(1, &key) < 0 || argstr(2, &value) < 0)
+    return -1;
+  return ftag(f, key, value);
+}
+
+int sys_funtag(void) {
+  int fd;
+  struct file *f;
+  char *key;
+  if (argfd(0, &fd, &f) < 0 || argstr(1, &key) < 0)
+    return -1;
+  return funtag(f, key);
+}
+
+int sys_gettag(void) {
+  int fd;
+  struct file *f;
+  char *key, *buf;
+  if (argfd(0, &fd, &f) < 0 || argstr(1, &key) < 0 || argstr(2, &buf) < 0)
+    return -1;
+  return gettag(f, key, buf);
 }

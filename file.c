@@ -155,3 +155,106 @@ filewrite(struct file *f, char *addr, int n)
   panic("filewrite");
 }
 
+/* Assignment 4 */
+// Constant tag size = 40
+
+static int find_tag_off(char *tag_block, const char *key) {
+  int off;
+  for (off = 0; off + TAG_SIZE < BSIZE; off += TAG_SIZE) {
+    if (strncmp(&tag_block[off], key, strlen(key)) == 0) {
+      return off;
+    }
+  }
+  return -1;
+}
+
+static int new_tag_off(char *tag_block)  {
+  int off;
+  for (off = 0; off + TAG_SIZE < BSIZE; off += TAG_SIZE) {
+    if (tag_block[off] == '\0') {
+      return off;
+    }
+  }
+  return -1;
+}
+
+
+// Debug
+static void print_tags(char *tag_block) {
+  int off;
+  for (off = 0; off + TAG_SIZE < BSIZE; off += TAG_SIZE) {
+    cprintf("%s=%s ", &tag_block[off], TAG_VALUE(tag_block, off));
+  }
+  cprintf("\n");
+}
+
+int ftag(struct file *f, const char *key, const char *value) {
+  char tag_block[BSIZE];
+  int tag_off;
+
+  if (strlen(key) > 10 || strlen(value) > 30) {
+    return -1;
+  }
+  begin_op();
+  ilock(f->ip);
+  readtagi(f->ip, tag_block);
+  if ((tag_off = find_tag_off(tag_block, key)) < 0) {
+    if ((tag_off = new_tag_off(tag_block)) < 0) {
+      iunlock(f->ip);
+      end_op();
+      return -1;
+    }
+  }
+  safestrcpy(&tag_block[tag_off], key, strlen(key) + 1);
+  safestrcpy(&tag_block[tag_off + strlen(key) + 1], value, strlen(value) + 1);
+  writetagi(f->ip, tag_block);
+  iunlock(f->ip);
+  end_op();
+  print_tags(tag_block); // Debug
+  return 0;
+}
+
+int funtag(struct file *f, const char *key) {
+  char tag_block[BSIZE];
+  int tag_off;
+
+  if (strlen(key) > 10) {
+    return -1;
+  }
+  begin_op();
+  ilock(f->ip);
+  readtagi(f->ip, tag_block);
+  if ((tag_off = find_tag_off(tag_block, key)) < 0) {
+    iunlock(f->ip);
+    end_op();
+    return -1;
+  }
+  memset(&tag_block[tag_off], 0, TAG_SIZE);
+  writetagi(f->ip, tag_block);
+  iunlock(f->ip);
+  end_op();
+  print_tags(tag_block); // Debug
+  return 0;
+}
+
+int gettag(struct file *f, const char *key, char *buf) {
+  char tag_block[BSIZE];
+  int tag_off;
+
+  if (strlen(key) > 10) {
+    return -1;
+  }
+  begin_op();
+  ilock(f->ip);
+  readtagi(f->ip, tag_block);
+  if ((tag_off = find_tag_off(tag_block, key)) < 0) {
+    iunlock(f->ip);
+    end_op();
+    return -1;
+  }
+  safestrcpy(buf, TAG_VALUE(tag_block, tag_off), 30);
+  writetagi(f->ip, tag_block);
+  iunlock(f->ip);
+  end_op();
+  return 0;
+}

@@ -23,7 +23,7 @@ struct inode {
   short nlink;
   uint size;
   /* Assignment 4 */
-  uint addrs[NDIRECT+2];
+  uint addrs[NDIRECT+3];
 };
 
 // table mapping major device number to
@@ -36,3 +36,7 @@ struct devsw {
 extern struct devsw devsw[];
 
 #define CONSOLE 1
+
+/* Assignment 4 */
+#define TAG_SIZE 40
+#define TAG_VALUE(t, o) (&(t)[(o) + strlen(&(t)[(o)]) + 1])
