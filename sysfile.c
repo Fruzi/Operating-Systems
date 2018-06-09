@@ -303,12 +303,16 @@ sys_open(void)
       return -1;
     }
   } else {
-    if((ip = namei(path)) == 0){
+    /* Assignment 4 */
+    if ((omode & O_NOLINKS) && ((ip = nameinolinks(path)) == 0)) {
+      end_op();
+      return -1;
+    } else if (!(omode & O_NOLINKS) && (ip = namei(path)) == 0) {
       end_op();
       return -1;
     }
     ilock(ip);
-    if(ip->type == T_DIR && omode != O_RDONLY){
+    if(ip->type == T_DIR && omode != O_RDONLY && omode != O_NOLINKS){
       iunlockput(ip);
       end_op();
       return -1;
@@ -447,8 +451,6 @@ sys_pipe(void)
 /* Assignment 4 */
 int sys_symlink(void) {
   char *oldpath, *newpath;
-  int fd;
-  struct file *f;
   struct inode *ip;
 
   if (argstr(0, &oldpath) < 0 || argstr(1, &newpath) < 0)
@@ -456,37 +458,15 @@ int sys_symlink(void) {
 
   begin_op();
 
-  if (namei(newpath)) {
-    end_op();
-    return -1;
-  }
   if ((ip = create(newpath, T_SYM, 0, 0)) == 0) {
     end_op();
     return -1;
   }
 
-  if ((f = filealloc()) == 0 || (fd = fdalloc(f)) < 0) {
-    if (f)
-      fileclose(f);
-    iunlockput(ip);
-    end_op();
-    return -1;
-  }
-  iunlock(ip);
+  writei(ip, oldpath, 0, strlen(oldpath) + 1);
+  iunlockput(ip);
   end_op();
-
-  f->type = FD_INODE;
-  f->ip = ip;
-  f->off = 0;
-  f->readable = 0;
-  f->writable = 1;
-
-  // Write oldpath into then new file f, then close the file.
-  filewrite(f, oldpath, strlen(oldpath) + 1);
-  myproc()->ofile[fd] = 0;
-  fileclose(f);
-
-  return fd;
+  return 0;
 }
 
 int sys_readlink(void) {

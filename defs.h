@@ -60,6 +60,7 @@ int             writei(struct inode*, char*, uint, uint);
 int             readlink(const char*, char*, uint);
 int             readtagi(struct inode*, char*);
 int             writetagi(struct inode*, char*);
+struct inode*   nameinolinks(char*);
 
 // ide.c
 void            ideinit(void);

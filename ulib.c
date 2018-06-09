@@ -73,7 +73,9 @@ stat(char *n, struct stat *st)
   int fd;
   int r;
 
-  fd = open(n, O_RDONLY);
+  /* Assignment 4 */
+  fd = open(n, O_RDONLY|O_NOLINKS);
+
   if(fd < 0)
     return -1;
   r = fstat(fd, st);

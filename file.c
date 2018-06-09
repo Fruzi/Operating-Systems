@@ -156,12 +156,14 @@ filewrite(struct file *f, char *addr, int n)
 }
 
 /* Assignment 4 */
-// Constant tag size = 40
 
 static int find_tag_off(char *tag_block, const char *key) {
   int off;
+  char *tag;
+
   for (off = 0; off + TAG_SIZE < BSIZE; off += TAG_SIZE) {
-    if (strncmp(&tag_block[off], key, strlen(key)) == 0) {
+    tag = &tag_block[off];
+    if (strncmp(tag, key, strlen(key)) == 0) {
       return off;
     }
   }
@@ -170,29 +172,34 @@ static int find_tag_off(char *tag_block, const char *key) {
 
 static int new_tag_off(char *tag_block)  {
   int off;
+  char *tag;
+
   for (off = 0; off + TAG_SIZE < BSIZE; off += TAG_SIZE) {
-    if (tag_block[off] == '\0') {
+    tag = &tag_block[off];
+    if (tag[0] == '\0') {
       return off;
     }
   }
   return -1;
 }
 
-
 // Debug
 static void print_tags(char *tag_block) {
   int off;
+  char *tag;
+
   for (off = 0; off + TAG_SIZE < BSIZE; off += TAG_SIZE) {
-    cprintf("%s=%s ", &tag_block[off], TAG_VALUE(tag_block, off));
+    tag = &tag_block[off];
+    cprintf("%s=%s ", tag, TAG_VALUE(tag));
   }
   cprintf("\n");
 }
 
 int ftag(struct file *f, const char *key, const char *value) {
-  char tag_block[BSIZE];
+  char tag_block[BSIZE], *tag;
   int tag_off;
 
-  if (strlen(key) > 10 || strlen(value) > 30) {
+  if (strlen(key) >= 10 || strlen(value) >= 30) {
     return -1;
   }
   begin_op();
@@ -205,8 +212,9 @@ int ftag(struct file *f, const char *key, const char *value) {
       return -1;
     }
   }
-  safestrcpy(&tag_block[tag_off], key, strlen(key) + 1);
-  safestrcpy(&tag_block[tag_off + strlen(key) + 1], value, strlen(value) + 1);
+  tag = &tag_block[tag_off];
+  safestrcpy(tag, key, strlen(key) + 1);
+  safestrcpy(TAG_VALUE(tag), value, strlen(value) + 1);
   writetagi(f->ip, tag_block);
   iunlock(f->ip);
   end_op();
@@ -215,10 +223,10 @@ int ftag(struct file *f, const char *key, const char *value) {
 }
 
 int funtag(struct file *f, const char *key) {
-  char tag_block[BSIZE];
+  char tag_block[BSIZE], *tag;
   int tag_off;
 
-  if (strlen(key) > 10) {
+  if (strlen(key) >= 10) {
     return -1;
   }
   begin_op();
@@ -229,7 +237,8 @@ int funtag(struct file *f, const char *key) {
     end_op();
     return -1;
   }
-  memset(&tag_block[tag_off], 0, TAG_SIZE);
+  tag = &tag_block[tag_off];
+  memset(tag, 0, TAG_SIZE);
   writetagi(f->ip, tag_block);
   iunlock(f->ip);
   end_op();
@@ -238,10 +247,10 @@ int funtag(struct file *f, const char *key) {
 }
 
 int gettag(struct file *f, const char *key, char *buf) {
-  char tag_block[BSIZE];
+  char tag_block[BSIZE], *tag;
   int tag_off;
 
-  if (strlen(key) > 10) {
+  if (strlen(key) >= 10) {
     return -1;
   }
   begin_op();
@@ -252,9 +261,10 @@ int gettag(struct file *f, const char *key, char *buf) {
     end_op();
     return -1;
   }
-  safestrcpy(buf, TAG_VALUE(tag_block, tag_off), 30);
+  tag = &tag_block[tag_off];
+  safestrcpy(buf, TAG_VALUE(tag), 30);
   writetagi(f->ip, tag_block);
   iunlock(f->ip);
   end_op();
-  return 0;
+  return strlen(TAG_VALUE(tag));
 }

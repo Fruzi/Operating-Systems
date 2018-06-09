@@ -39,4 +39,5 @@ extern struct devsw devsw[];
 
 /* Assignment 4 */
 #define TAG_SIZE 40
-#define TAG_VALUE(t, o) (&(t)[(o) + strlen(&(t)[(o)]) + 1])
+#define TAG_VALUE(t) (&(t)[strlen((t)) + 1])
+#define TAG_LEN(t) (strlen((t)) + 1 + strlen(TAG_VALUE((t))) + 1)

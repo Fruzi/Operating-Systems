@@ -32,47 +32,76 @@ void task1_sanity(void) {
   close(fd);
 }
 
-void task2_sanity(void) {
+void task2_maxderef_test(void) {
+  int fd, i;
+  char buf[10] = {0};
+  char filename[3] = {'g', '0', 0};
+  char linkname[3] = {'g', '1', 0};
+  char *link[5] = {"ln", "-s", filename, linkname, 0};
+
+  if ((fd = open(filename, O_CREATE|O_WRONLY)) < 0) {
+    return;
+  }
+  memset(buf, '1', 9);
+  buf[9] = '\0';
+  write(fd, (void*)buf, 10);
+  close(fd);
+  for (i = 0; i < 50; i++) {
+    filename[1]++;
+    linkname[1]++;
+    //printf(1, "%s %s %s %s\n", link[0], link[1], link[2], link[3]);
+    switch (fork()) {
+      case -1:
+        return;
+      case 0:
+        exec(link[0], link);
+        return;
+      default:
+        wait();
+    }
+  }
+  printf(1, "%d\n", readlink(filename, buf, 10));  // should fail (print -1)
+}
+
+void task2_link_test(void) {
   int fd;
-  char buf1[10] = {0}, buf2[10] = {0};
-  char *link1[5] = { "ln", "-s", "f1", "f2", 0 };
-  char *link2[5] = { "ln", "-s", "f2", "f3", 0 };
+  char buf[512] = {0};
+  char *link[5] = {"ln", "-s", "f1", "f2", 0};
 
   if ((fd = open("f1", O_CREATE|O_WRONLY)) < 0) {
     return;
   }
-  memset(buf1, '1', 9);
-  buf1[9] = '\0';
-  write(fd, (void*)buf1, 10);
+  memset(buf, '1', 9);
+  buf[9] = '\0';
+  write(fd, (void*)buf, 10);
   close(fd);
   switch (fork()) {
     case -1:
       return;
     case 0:
-      exec(link1[0], link1);
+      exec(link[0], link);
       return;
     default:
       wait();
   }
-  switch (fork()) {
-    case -1:
-      return;
-    case 0:
-      exec(link2[0], link2);
-      return;
-    default:
-      wait();
-  }
-  if ((fd = open("f3", O_RDONLY)) < 0) {
+  memset(buf, 0, sizeof(buf));
+  readlink("f2", buf, 15);
+  printf(1, "%s\n", buf);
+
+  printf(1, "%d\n", readlink("f1", buf, 15));  // should fail (print -1)
+
+  memset(buf, 0, sizeof(buf));
+  if ((fd = open("f2", O_RDONLY)) < 0) {
     return;
   }
-  read(fd, buf2, 10);
+  read(fd, buf, 10);
   close(fd);
-  printf(1, "%s\n", buf2);
-  buf2[0] = '\0';
+  printf(1, "%s\n", buf);
+}
 
-  readlink("f3", buf2, 15);
-  printf(1, "%s\n", buf2);
+void task2_sanity(void) {
+  task2_link_test();
+  //task2_maxderef_test();
 }
 
 void task3_sanity(void) {
@@ -86,7 +115,7 @@ void task3_sanity(void) {
   ftag(fd, "ghi", "jkl");
   ftag(fd, "abc", "sdfg");
   ftag(fd, "blbla", "aaaaaaaaa");
-  gettag(fd, "ghi", value);
+  printf(1, "%d\n", gettag(fd, "ghi", value));
   printf(1, "%s\n", value);
   funtag(fd, "abc");
   ftag(fd, "hello", "hi");

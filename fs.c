@@ -23,8 +23,6 @@
 
 #define min(a, b) ((a) < (b) ? (a) : (b))
 static void itrunc(struct inode*);
-static int readlink1(struct inode*, char*, uint);
-static struct inode* namei1(char*, char*);
 // there should be one superblock per disk device, but we run with
 // only one device
 struct superblock sb; 
@@ -424,6 +422,14 @@ bmap(struct inode *ip, uint bn)
     brelse(bp);
     return addr;
   }
+  bn -= NDOUBLEINDIRECT;
+
+  // tag block
+  if (bn < 1) {
+    if((addr = ip->addrs[bn]) == 0)
+      ip->addrs[bn] = addr = balloc(ip->dev);
+    return addr;
+  }
 
   panic("bmap: out of range");
 }
@@ -651,10 +657,10 @@ skipelem(char *path, char *name)
 // path element into name, which must have room for DIRSIZ bytes.
 // Must be called inside a transaction since it calls iput().
 static struct inode*
-namex(char *path, int nameiparent, char *name)
+namex(char *path, int nameiparent, char *name, int no_links)
 {
-  static int deref_count = 0;
   struct inode *ip, *next;
+  char sym_path[512];
 
   if(*path == '/')
     ip = iget(ROOTDEV, ROOTINO);
@@ -663,8 +669,7 @@ namex(char *path, int nameiparent, char *name)
 
   while((path = skipelem(path, name)) != 0){
     ilock(ip);
-    /* Assignment 4 */
-    if (ip->type != T_DIR) {
+    if(ip->type != T_DIR){
       iunlockput(ip);
       return 0;
     }
@@ -677,29 +682,22 @@ namex(char *path, int nameiparent, char *name)
       iunlockput(ip);
       return 0;
     }
-    iunlock(ip);
-    ilock(next);
-    if (next->type == T_SYM) {
-      if (deref_count++ >= MAX_DEREFERENCE) {
-        cprintf("Too many symbolic link dereferences\n");
-        iunlockput(next);
-        iput(ip);
-        return 0;
-      }
-      iunlock(next);
-      if (readlink1(next, name, DIRSIZ) < 0) {
-        iput(next);
-        iput(ip);
-        return 0;
-      }
-      iput(next);
-      next = namei(name);
-    } else {
-      deref_count = 0;
-      iunlock(next);
-    }
-    iput(ip);
+    iunlockput(ip);
     ip = next;
+
+    /* Assignment 4 */
+    if (no_links) continue;
+
+    ilock(ip);
+    if (ip->type == T_SYM) {
+      iunlockput(ip);
+      if (readlink(name, sym_path, 512) < 0) {
+        return 0;
+      }
+      ip = namei(sym_path);
+    } else {
+      iunlock(ip);
+    }
   }
   if(nameiparent){
     iput(ip);
@@ -708,89 +706,65 @@ namex(char *path, int nameiparent, char *name)
   return ip;
 }
 
-static struct inode* namei1(char *path, char *name) {
-  return namex(path, 0, name);
-}
-
 struct inode*
 namei(char *path)
 {
   char name[DIRSIZ];
-  return namex(path, 0, name);
+  return namex(path, 0, name, 0);
 }
 
 struct inode*
 nameiparent(char *path, char *name)
 {
-  return namex(path, 1, name);
+  return namex(path, 1, name, 0);
 }
 
 /* Assignment 4 */
-static int readlink1(struct inode *ip, char *buf, uint bufsize) {
-  char temp_buf[512];
-  struct inode *next_ip;
-  int deref_count;
 
-  begin_op();
-  ilock(ip);
-  if (ip->type != T_SYM) {
-    cprintf("not symbolic\n");
-    iunlockput(ip);
-    end_op();
-    return -1;
-  }
-
-  for (deref_count = 0; deref_count < MAX_DEREFERENCE; deref_count++) {
-    readi(ip, temp_buf, 0, 512);
-    if ((next_ip = namei(temp_buf)) == 0) {
-      cprintf("broken link\n");
-      iunlockput(ip);
-      end_op();
-      return -1;
-    }
-    if (next_ip->type != T_SYM) {
-      // Found the last link.
-      if (strlen(temp_buf) > bufsize) {
-        cprintf("buffer too big\n");
-        iunlockput(ip);
-        end_op();
-        return -1;
-      }
-      safestrcpy(buf, temp_buf, bufsize);
-      iunlockput(ip);
-      end_op();
-      return 0;
-    }
-    // Follow the next link.
-    iunlockput(ip);
-    ip = next_ip;
-    ilock(ip);
-  }
-  cprintf("reached maximum dereferences\n");
-  iunlockput(ip);
-  end_op();
-  return -1;
+struct inode* nameinolinks(char *path) {
+  char name[DIRSIZ];
+  return namex(path, 0, name, 1);
 }
 
 int readlink(const char *pathname, char *buf, uint bufsize) {
-  if (namei1((char*)pathname, buf) == 0) {
-    return -1;
-  }
-  return 0;
-}
+  static int deref_count = 0;
+  struct inode *ip;
+  char temp_buf[512];
 
-// Like bmap but for the tag block
-static uint tagbmap(struct inode *ip) {
-  uint addr;
-  if((addr = ip->addrs[NDIRECT+2]) == 0)
-    ip->addrs[NDIRECT+2] = addr = balloc(ip->dev);
-  return addr;
+  if ((ip = nameinolinks((char*)pathname)) == 0) {
+    iput(ip);
+    goto bad;
+  }
+  ilock(ip);
+  if (ip->type != T_SYM) {
+    iunlockput(ip);
+    if (deref_count == 0) {
+      goto bad;
+    }
+    safestrcpy(buf, pathname, bufsize);
+    deref_count = 0;
+    return 0;
+  }
+  if (deref_count++ >= MAX_DEREFERENCE) {
+    iunlockput(ip);
+    goto bad;
+  }
+  if (readi(ip, temp_buf, 0, 512) > bufsize) {
+    iunlockput(ip);
+    goto bad;
+  }
+  iunlockput(ip);
+  return readlink(temp_buf, buf, bufsize);
+
+bad:
+  deref_count = 0;
+  return -1;
 }
 
 int readtagi(struct inode *ip, char *dst) {
   struct buf *bp;
 
-  bp = bread(ip->dev, tagbmap(ip));
+  bp = bread(ip->dev, bmap(ip, MAXFILE));
   memmove(dst, bp->data, BSIZE);
   brelse(bp);
   return BSIZE;
@@ -798,7 +772,7 @@ int readtagi(struct inode *ip, char *dst) {
 
 int writetagi(struct inode *ip, char *src) {
   struct buf *bp;
-  bp = bread(ip->dev, tagbmap(ip));
+  bp = bread(ip->dev, bmap(ip, MAXFILE));
   memmove(bp->data, src, BSIZE);
   log_write(bp);
   brelse(bp);
