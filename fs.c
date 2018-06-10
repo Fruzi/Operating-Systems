@@ -776,5 +776,6 @@ int writetagi(struct inode *ip, char *src) {
   memmove(bp->data, src, BSIZE);
   log_write(bp);
   brelse(bp);
+  iupdate(ip);
   return BSIZE;
 }

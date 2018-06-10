@@ -108,13 +108,17 @@ void task3_sanity(void) {
   int fd;
   char value[30];
 
-  if ((fd = open("f1", O_CREATE|O_RDWR)) < 0) {
+  if ((fd = open("f1", O_CREATE|O_RDONLY)) < 0) {
     return;
   }
   ftag(fd, "abc", "def");
   ftag(fd, "ghi", "jkl");
   ftag(fd, "abc", "sdfg");
   ftag(fd, "blbla", "aaaaaaaaa");
+  close(fd);
+  if ((fd = open("f1", O_RDONLY)) < 0) {
+    return;
+  }
   printf(1, "%d\n", gettag(fd, "ghi", value));
   printf(1, "%s\n", value);
   funtag(fd, "abc");
