@@ -43,3 +43,4 @@ void* memset(void*, int, uint);
 void* malloc(uint);
 void free(void*);
 int atoi(const char*);
+char* safestrcpy(char *, const char *, int);
