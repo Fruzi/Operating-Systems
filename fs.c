@@ -660,7 +660,7 @@ static struct inode*
 namex(char *path, int nameiparent, char *name, int no_links)
 {
   struct inode *ip, *next;
-  char sym_path[512];
+  char acc_path[512] = {0}, *p;
 
   if(*path == '/')
     ip = iget(ROOTDEV, ROOTINO);
@@ -688,13 +688,19 @@ namex(char *path, int nameiparent, char *name, int no_links)
     /* Assignment 4 */
     if (no_links) continue;
 
+    p = &acc_path[strlen(acc_path)];
+    if (p - acc_path > 0) {
+      *p++ = '/';
+    }
+    safestrcpy(p, name, DIRSIZ);
+
     ilock(ip);
     if (ip->type == T_SYM) {
       iunlockput(ip);
-      if (readlink(name, sym_path, 512) < 0) {
+      if (readlink(acc_path, acc_path, 512) < 0) {
         return 0;
       }
-      ip = namei(sym_path);
+      ip = namei(acc_path);
     } else {
       iunlock(ip);
     }
@@ -731,8 +737,11 @@ int readlink(const char *pathname, char *buf, uint bufsize) {
   struct inode *ip;
   char temp_buf[512];
 
-  if ((ip = nameinolinks((char*)pathname)) == 0) {
-    iput(ip);
+  if (deref_count == 0) {
+    if ((ip = nameinolinks((char*)pathname)) == 0) {
+      goto bad;
+    }
+  } else if ((ip = namei((char*)pathname)) == 0) {
     goto bad;
   }
   ilock(ip);
