@@ -184,6 +184,7 @@ static int new_tag_off(char *tag_block)  {
 }
 
 // Debug
+/*
 static void print_tags(char *tag_block) {
   int off;
   char *tag;
@@ -194,6 +195,7 @@ static void print_tags(char *tag_block) {
   }
   cprintf("\n");
 }
+*/
 
 int ftag(struct file *f, const char *key, const char *value) {
   char tag_block[BSIZE], *tag;
@@ -218,7 +220,6 @@ int ftag(struct file *f, const char *key, const char *value) {
   writetagi(f->ip, tag_block);
   iunlock(f->ip);
   end_op();
-  print_tags(tag_block); // Debug
   return 0;
 }
 
@@ -242,7 +243,6 @@ int funtag(struct file *f, const char *key) {
   writetagi(f->ip, tag_block);
   iunlock(f->ip);
   end_op();
-  print_tags(tag_block); // Debug
   return 0;
 }
 

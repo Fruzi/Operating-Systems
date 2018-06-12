@@ -20,7 +20,11 @@ int is_match(int fd, const char *filename) {
   struct stat st;
   char tag_key[10], tag_value[30], file_tag_value[30], *tag_sep;
 
-  fstat(fd, &st);
+  if (fstat(fd, &st) < 0) {
+    printf(2, "find: cannot stat %s\n", filename);
+    return 0;
+  }
+
   if (*name && strcmp(filename, name) != 0) {
     match = 0;
   }
@@ -72,8 +76,12 @@ void find(const char *path) {
       return;
     }
   }
+  if (fstat(fd, &st) < 0) {
+    printf(2, "find: cannot stat %s\n", path);
+    close(fd);
+    return;
+  }
 
-  fstat(fd, &st);
   filename = (char*)path;
   while ((filename_temp = strchr(filename, '/')) != 0) {
     filename = filename_temp + 1;
